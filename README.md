@@ -1,11 +1,12 @@
 # lacer
-Lacer: Accurate Base Quality Score Recalibration using Linear Algebra
+Lacer: Accurate Base Quality Score Recalibration using Linear Algebra  
 Version: 0.42
 
 Lacer takes a BAM file and produces a recalibration file similar to GATK's BaseRecalibrator.  The resulting recalibration file can be used in GATK's PrintReads to perform a recalibration.
 
 Installation / Requirements
 ---------------------------
+
 Lacer is a perl script.  It has only been tested on Perl version 5.10 and later.
 
 It depends on the following Perl modules available in a standard Perl installation or on CPAN:
@@ -24,6 +25,7 @@ threads::shared
 
 To check the availability of these modules, you can run:
 > perl -e 'use Bio::DB::Sam'
+
 replacing "Bio::DB::Sam" with any of the modules from the above list.  If there is no error, that module is available.
 
 Usage
@@ -33,6 +35,7 @@ A help screen describing options to Lacer is displayed if you run the script wit
 
 An indexed bam file is needed.  If your bam file is named "input.bam", please run:
 > samtools index input.bam
+
 or the equivalent prior to running Lacer.
 
 The reference fasta file to which your reads were aligned is also required.  If this is named "reference.fasta", then the basic usage is:
@@ -55,7 +58,7 @@ For GATK version 2.8 or later:
 
 Known Issues
 ------------
-When running Lacer, the following warning will appear:
+When running Lacer, the following warning will appear:  
 Subroutine PDL::CLONE_SKIP redefined at /mnt/software/lib/perl5/5.10.1/PDL/Parallel/threads.pm line 39.
 
 This warning can be safely ignored.
