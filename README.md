@@ -57,7 +57,9 @@ samtools index input.bam
 or the equivalent prior to running Lacer.
 
 The reference fasta file to which your reads were aligned is also required.  If this is named "reference.fasta", then the basic usage is:
-> ./lacer.pl -bam input.bam -reference reference.fasta -outfile recal.txt
+```
+./lacer.pl -bam input.bam -reference reference.fasta -outfile recal.txt
+```
 
 The output file, recal.txt, can then be used in the GATK workflow:
 ```
