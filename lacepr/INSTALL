@@ -1,0 +1,11 @@
+# To compile lacepr:
+# Set the SAMTOOLS and HTSLIB library locations below
+# Then execute the compile command
+SAMTOOLS=<path-to-samtools>
+HTSLIB=<path-to-htslib>
+gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -o lacepr
+
+# To install lacepr:
+# Move the lacepr executable to somewhere on your path
+#
+# Usage: lacepr <in.bam> <recal.tab> <out.bam>
