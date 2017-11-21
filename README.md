@@ -34,8 +34,8 @@ To check the availability of these modules, you can run:
 replacing "Bio::DB::Sam" with any of the modules from the above list.  If there is no error, that module is available.
 
 For Lacepr, the basic one needs samtools and htslib libraries. It has only been tested with samtools-1.1 and htslib-1.1 and later. To compile, first set the location of the samtools and htslib libraries, then execute the following command in the lacepr subdirectory:
-> SAMTOOLS=<path-to-samtools>
-> HTSLIB=<path-to-htslib>
+> SAMTOOLS=path-to-samtools
+> HTSLIB=path-to-htslib
 > gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -o lacepr
 
 Usage
