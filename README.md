@@ -1,6 +1,6 @@
 # lacer
 Lacer: Accurate Base Quality Score Recalibration using Linear Algebra  
-Version: 0.42
+Version: 0.424
 
 Lacepr: A fast replacement to rewrite recalibrated base quality scores in bam files
 Version: 0.1
