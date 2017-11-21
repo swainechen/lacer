@@ -29,22 +29,30 @@ threads
 threads::shared  
 
 To check the availability of these modules, you can run:
-> perl -e 'use Bio::DB::Sam'
+```
+perl -e 'use Bio::DB::Sam'
+```
 
 replacing "Bio::DB::Sam" with any of the modules from the above list.  If there is no error, that module is available.
 
 For Lacepr, the basic one needs samtools and htslib libraries. It has only been tested with samtools-1.1 and htslib-1.1 and later. To compile, first set the location of the samtools and htslib libraries, then execute the following command in the lacepr subdirectory:
-> SAMTOOLS=path-to-samtools
-> HTSLIB=path-to-htslib
-> gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -o lacepr
+```
+SAMTOOLS=path-to-samtools
+HTSLIB=path-to-htslib
+gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -o lacepr
+```
 
 Usage
 -----
 A help screen describing options to Lacer is displayed if you run the script without any arguments:
-> ./lacer.pl
+```
+./lacer.pl
+```
 
 An indexed bam file is needed.  If your bam file is named "input.bam", please run:
-> samtools index input.bam
+```
+samtools index input.bam
+```
 
 or the equivalent prior to running Lacer.
 
@@ -52,22 +60,30 @@ The reference fasta file to which your reads were aligned is also required.  If 
 > ./lacer.pl -bam input.bam -reference reference.fasta -outfile recal.txt
 
 The output file, recal.txt, can then be used in the GATK workflow:
-> java -Xmx2g -jar GenomeAnalysisTK.jar \
+```
+java -Xmx2g -jar GenomeAnalysisTK.jar \
      -R reference.fasta \
      -T PrintReads \
      -o recal.bam \
      -I input.bam \
      -BQSR recal.txt
+```
 
 Alternatively, lacepr can be used:
-> ./lacepr input.bam recal.txt recal.bam
+```
+./lacepr input.bam recal.txt recal.bam
+```
 
 Note: The format of the recalibration table required by GATK has changed frequently in recent versions.  Depending on the version of GATK you are using, you may need to specify additional parameters to Lacer to produce the appropriate format file.
 For GATK version 2.7:
-> ./lacer.pl -bam input.bam -reference reference.fasta -rgfield ID -outfile recal.txt
+```
+./lacer.pl -bam input.bam -reference reference.fasta -rgfield ID -outfile recal.txt
+```
 
 For GATK version 2.8 or later:
-> ./lacer.pl -bam input.bam -reference reference.fasta -rgfield PU -outfile recal.txt
+```
+./lacer.pl -bam input.bam -reference reference.fasta -rgfield PU -outfile recal.txt
+```
 
 Known Issues
 ------------
