@@ -1,8 +1,48 @@
 #!/usr/bin/perl
 #
 
-my $lacer_version = "0.42";
+my $lacer_version = 0.424;
 
+# version 0.424
+# change -dump to a flag instead of requiring an integer argument
+# add percentage to # of recalibration bases on status display
+# change default $MINCOV to 5 to prevent lots of coverage=1 bases taking up
+# too many recalibration bases, particularly a problem when using -stopbases
+#
+# version 0.423
+# clean up verbose vs. dump, default thread_debug is 0
+# fixed bug with reporting reverse complement base when mapped to negative
+# strand - context was ok, just the base at that position was revcomped when it
+# shouldn't have been
+#
+# version 0.422
+# add bed file input for regions
+#
+# version 0.421
+# add some extra output for figures, quality control, etc.
+#
+# version 0.42
+# fix up read group handling
+# change defaults - no coverage limit
+#
+# version 0.41
+# separate out GLOBALS - 0.5 experiment with consolidating made it slower
+# don't use single anymore, use actual counts
+# alter sort order to capture minor nonconsensus bases
+#
+# version 0.4
+# start cleaning up a bit
+# add a better progress indicator
+#
+# version 0.3
+# thread enabled
+# batch together pdl calls instead of doing one per base
+#
+# version 0.2
+# change default range span to 0.8 instead of 0.5
+# also make this a parameter
+# add in context and cycle covariates
+# switch histogram keying to enable this
 #
 use warnings;
 use strict;
@@ -45,7 +85,7 @@ my ($CONSENSUS_TO_PRINT,
     $USE_READGROUPS) :shared;
 $CONSENSUS_TO_PRINT = 1;	# 0 means all
 $MAXCOV = 0;	# max coverage at a given position - skip if greater
-$MINCOV = 0;	# min coverage at a given position - skip if less
+$MINCOV = 5;	# min coverage at a given position - skip if less
 $MINMAPQ = 30;	# minimum mapping quality to consider
 $MINQ = 6;		# minimum base quality to consider
 $INCLUDEVCF = 0;	# 0 is skip vcf positions, 1 is only use vcf positions
@@ -80,6 +120,7 @@ my $num_threads = 4;
 my $rgfield = "ID";
 my $randomize_regions = 0;
 my $stop_bases = 0;
+my $thread_debug = 0;
 GetOptions (
   'bam=s' => \$bamfile,
   'reference=s' => \$ref_fasta,
@@ -103,7 +144,7 @@ GetOptions (
   'covariates!' => \$do_covariates,
   'threads=i' => \$num_threads,
   'minor=f' => \$MINOR_FREQ,
-  'dump=i' => \$DUMP,
+  'dump!' => \$DUMP,
   'readgroups!' => \$USE_READGROUPS,
   'rgfield=s' => \$rgfield
 );
@@ -133,6 +174,8 @@ General data parameters (mostly similar to GATK)
   -mapq <int>                : minimum mapping quality - discard read otherwise
                                (default $MINMAPQ)
   -region <chrom:first-last> : region to focus on for pileups and recalibration
+                               can also specify a BED file (chrom first last)
+                               BED format is whitespace delimited
                                (default all chromosomes, all positions)
   -covariates|nocovariates   : whether to do context and cycle covariates
                                (default covariates)
@@ -175,11 +218,7 @@ Technical SVD/recalibration parameters
   -verbose <0|1|2>           : 0 = totally silent
                                1 = progress meter (default)
                                2 = noisy (memory usage, timing, etc on STDOUT)
-  -dump <0|1>                : dump all the data to STDOUT (warning it's a lot)
-                               (default 0)
-
-** Please note **
-This is a review only version of Lacer.  Do not distribute.  Please delete upon completion of review.
+  -dump|nodump               : dump all the data to STDOUT (warning it's a lot)
 __USAGE__
   exit;
 }
@@ -265,7 +304,23 @@ if ($verbose == 2) {
 #
 # figure out what regions we're looking at
 #
-if (length $region) {
+if (length $region && -f $region) {
+  open REG, $region;
+  while ($j = <REG>) {
+    next if $j =~ /^#/;
+    next if $j =~ /^$/;
+    chomp;
+    ($chrom, $start, $end) = split /\s+/, $j;
+    # bed file is 0-based so correct range, but only need start
+    $start++;
+    for ($i = $start; $i <= $end; $i += $windowsize) {
+      $first = $i;
+      $last = $i+$windowsize-1;
+      $last = $end if $end < $last;
+      push @regions, "$chrom:$first-$last";
+    }
+  }
+} elsif (length $region) {
   ($chrom, $range) = split /:/, $region;
   ($start, $end) = split /-/, $range;
   if (!$start || !$end) {
@@ -308,6 +363,7 @@ if ($randomize_regions) {
 # use this to initialize the pdls for $alldata
 #
 if ($USE_READGROUPS) {
+  undef $rginfo;
   @f = split /\n/, $bam_comments;
   foreach $i (@f) {
     if ($i =~ /^\@RG/) {
@@ -322,6 +378,12 @@ if ($USE_READGROUPS) {
           $rginfo->{$rg}->{$j} = "NULL";
         }
       }
+    }
+  }
+  if (!defined $rginfo) {
+    @RG_LIST = ("NULL");
+    foreach $j (qw(ID PL PU LB SM)) {
+      $rginfo->{"NULL"}->{$j} = "NULL";
     }
   }
 }
@@ -359,10 +421,10 @@ $queue->enqueue(@regions);
 $number_regions = scalar @regions;
 
 $num_threads = scalar @regions if scalar @regions < $num_threads;
-  foreach $i (1..$num_threads) {
-    threads->create(\&worker, $queue, $i, $i . "__");
-    $THREADSTATUS[$i] = "started";
-  }
+foreach $i (1..$num_threads) {
+  threads->create(\&worker, $queue, $i, $i . "__");
+  $THREADSTATUS[$i] = "started";
+}
 
 sub worker {
   my $q = shift;
@@ -444,10 +506,12 @@ sub worker {
         # context should be reverse complemented already if negative strand
         # base returned should be positive strand regardless - to compare with ref
         $temppos = $p->qpos+1;
-        ($context[$i], $nt[$i]) = get_context($aln->qseq, $p->qpos, 1);
+#        ($context[$i], $nt[$i]) = get_context($aln->qseq, $p->qpos, 1);
+        ($context[$i], $nt[$i]) = get_2base($aln->qseq, $p->qpos, 1);
       } else {
         $temppos = $aln->l_qseq - $p->qpos;
-        ($context[$i], $nt[$i]) = get_context($aln->qseq, $p->qpos, -1);
+#        ($context[$i], $nt[$i]) = get_context($aln->qseq, $p->qpos, -1);
+        ($context[$i], $nt[$i]) = get_2base($aln->qseq, $p->qpos, -1);
       }
       $temppos = -$temppos if $aln->get_tag_values("SECOND_MATE");
       $temphist->{$rg[$i]}->{$temppos}->[$tempq]++;	# position specific
@@ -538,7 +602,7 @@ sub worker {
         push @data, $context_code{$context[$i]};
         if ($DUMP) {
           lock(@DUMPDATA);
-          push @DUMPDATA, join ("\t", $pos, @data);
+          push @DUMPDATA, join ("\t", $seqid, $pos, $nt[$i], $aln->qual, $aln->strand, @data);
         }
 
         $tempdata->{$rg[$i]} = null if !defined $tempdata->{$rg[$i]};
@@ -558,7 +622,9 @@ sub worker {
     } else {
       ($first, $last) = (0, 0);	# we should never really hit this else clause
     }
+if ($thread_debug) { print STDERR "About to do pileup for $region, thread $thread, status $THREADSTATUS[$thread]\n"; }
     $sam->fast_pileup($region, $map_consensus);
+if ($thread_debug) { print STDERR "Return from pileup for $region, thread $thread, status $THREADSTATUS[$thread]\n"; }
     foreach $rg (keys %$tempdata) {
       if (!defined $alldata->{$rg}) {
         # actually if there are no read groups we should have defined
@@ -623,7 +689,7 @@ sub worker {
 
 @threadlist = threads->list;
 $waiting = 1;
-$wait_interval = 5;
+$wait_interval = 60;
 if ($verbose) {
   $progress = Term::ProgressBar->new({ name => "Pileups", count => $number_regions, remove => 0, ETA => 'linear' });
   $progress->max_update_rate($wait_interval);
@@ -632,10 +698,10 @@ if ($verbose) {
   if ($stop_bases > 0) {
     $progress->message("Will stop after finding at least $stop_bases calibration bases. Progress bar won't mean anything...");
   }
-  $progress->message("For all read groups: 0/0 (calibration/total) bases processed");
+  $progress->message("For all read groups: 0/0 (calibration/total; 0.00%) bases processed");
 }
 if ($DUMP) {
-  print STDOUT join ("\t", "# Position", "Quality", "Consensus", "Vote", "Coverage", "Cycle", "ContextCode"), "\n";
+  print STDOUT join ("\t", "# SeqID", "Position", "Base", "MapQ", "Strand", "Quality", "Consensus", "Vote", "Coverage", "Cycle", "ContextCode"), "\n";
 }
 my $message = "";
 my $ml = 0;
@@ -671,9 +737,25 @@ while ($waiting) {
     if (defined($pending)) {
       $progress->update($number_regions - $pending - $num_threads);
     }
-    $message = "\b\rFor all read groups: $CALIBRATION_BASES/" . $TOTAL_BASES . " (calibration/total) bases processed";
-    $ml = length($message) - $ml - 1;
-    $progress->message($message);
+    if ($TOTAL_BASES > 0) {
+      $message = "\b\rFor all read groups: $CALIBRATION_BASES/" . $TOTAL_BASES . " (calibration/total; " . sprintf("%.2f", $CALIBRATION_BASES/$TOTAL_BASES * 100) . "%) bases processed";
+      $ml = length($message) - $ml - 1;
+      $progress->message($message);
+    }
+  }
+  if ($thread_debug) {
+    print STDERR "Stop Bases: $stop_bases\n";
+    print STDERR "Calibration Bases: $CALIBRATION_BASES\n";
+    print STDERR "Threads:\n";
+    foreach $i (1..$#THREADSTATUS) {
+      print STDERR "  Thread $i -- $THREADSTATUS[$i]\n";
+    }
+    print STDERR "Queue:\n";
+    if ($pending) {
+      print STDERR "  Pending: $pending; Total: $number_regions\n";
+      print STDERR "  Next in queue: ", $queue->peek(), "\n";
+      print STDERR "  Last in queue: ", $queue->peek(-1), "\n";
+    }
   }
   if ($stop_bases > 0 && $CALIBRATION_BASES > $stop_bases) {
     &quit_pileups;
@@ -687,7 +769,7 @@ if (!defined $ALLHIST || ref($ALLHIST) ne "HASH") {
 }
 if ($verbose) {
   $progress->update($number_regions);
-  print STDERR "Beginning SVD-based recalibration...\n";
+  print STDERR "\nBeginning SVD-based recalibration...\n";
 }
 
 #
@@ -724,6 +806,7 @@ foreach $j ($MINQUAL..$MAXQUAL) {
   }
 }
 
+my $pca1;
 foreach $rg (keys %$alldata) {
   # sanity check to make sure we have data
   if (ref($alldata->{$rg}) ne "PDL" ||
@@ -744,7 +827,10 @@ foreach $rg (keys %$alldata) {
     print STDOUT "# Initial base data size for read group $rg: ", $alldata->{$rg}->shape, "\n";
   }
   if (!$matrix->isnull) {
-    $recalibrated->{$rg} = quality_svd($matrix, $svd_hist->{$rg}, $svd_bin, $last_count, $min_span);
+    ($recalibrated->{$rg}, $pca1) = quality_svd($matrix, $svd_hist->{$rg}, $svd_bin, $last_count, $min_span);
+    if ($verbose) {
+      print STDOUT "# SVD fit (overall recalibration): $pca1\n";
+    }
     $mu->record("After quality_svd");
   }
 
@@ -759,7 +845,10 @@ foreach $rg (keys %$alldata) {
           print OUT "# Covariate: $code_context{$covariate} ($covariate)\n";
         }
         $covariate_hist->{$rg}->{$code_context{$covariate}} = pdl(to_int(@{$ALLHIST->{$rg}->{$code_context{$covariate}}}[$MINQUAL..$MAXQUAL]));
-        $covariate_recalibrated->{$rg}->{$code_context{$covariate}} = quality_svd($matrix, $covariate_hist->{$rg}->{$code_context{$covariate}}, $covariate_binsize, $last_count, $min_span);
+        ($covariate_recalibrated->{$rg}->{$code_context{$covariate}}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$code_context{$covariate}}, $covariate_binsize, $last_count, $min_span);
+        if ($verbose) {
+          print STDOUT "# SVD fit $code_context{$covariate} ($covariate): $pca1\n";
+        }
       }
     }
     $mu->record("After context covariates");
@@ -773,7 +862,10 @@ foreach $rg (keys %$alldata) {
           print OUT "# Covariate: $covariate\n";
         }
         $covariate_hist->{$rg}->{$covariate} = pdl(to_int(@{$ALLHIST->{$rg}->{$covariate}}[$MINQUAL..$MAXQUAL]));
-        $covariate_recalibrated->{$rg}->{$covariate} = quality_svd($matrix, $covariate_hist->{$rg}->{$covariate}, $covariate_binsize, $last_count, $min_span);
+        ($covariate_recalibrated->{$rg}->{$covariate}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$covariate}, $covariate_binsize, $last_count, $min_span);
+        if ($verbose) {
+          print STDOUT "# SVD fit (Position $covariate): $pca1\n";
+        }
       }
     }
     $mu->record("After position covariates");
@@ -920,7 +1012,7 @@ sub get_context {
   if ($position == $l-1) {
     $right = ".";
   } else {
-    $right = unpack("x" . $position . "A1", $sequence);
+    $right = unpack("x" . ($position + 1) . "A1", $sequence);
   }
   if ($strand < 0) {
     $temp = $left;
@@ -932,6 +1024,89 @@ sub get_context {
   $left =~ s/[^GATC.]/./g;
   $right =~ s/[^GATC.]/./g;
   return ($left.$right, $base);
+}
+
+sub get_contextpre {
+  my ($sequence, $position, $strand) = @_;
+  # position should be 0-based
+  # nt should not be reverse complemented - we need to keep track of polymorphism
+  # we are giving the two bases before the indicated base here
+  my $pre1 = "";
+  my $pre2 = "";
+  my $l = length($sequence);
+  my $base;
+  if ($strand > 0) {
+    if ($position > 1) {
+      ($pre2, $pre1, $base) = unpack("x" . ($position-2) . "A1A1A1", $sequence);
+    } elsif ($position == 1) {
+      $pre2 = ".";
+      ($pre1, $base) = unpack("x" . ($position-1) . "A1A1", $sequence);
+    } elsif ($position == 0) {
+      $pre2 = ".";
+      $pre1 = ".";
+      $base = unpack("A1", $sequence);
+    }
+  } else {
+    if ($position < $l-2) {
+      if ($position > 0) {
+        ($base, $pre1, $pre2) = unpack("x" . ($position) . "A1A1A1", $sequence);
+      } else {
+        ($base, $pre1, $pre2) = unpack("A1A1A1", $sequence);
+      }
+    } elsif ($position == $l-2) {
+      ($base, $pre1) = unpack("x" . ($position) . "A1A1", $sequence);
+      $pre2 = ".";
+    } elsif ($position == $l-1) {
+      $pre1 = ".";
+      $pre2 = ".";
+      $base = unpack("x" . ($position) . "A1", $sequence);
+    }
+    $pre1 =~ tr/GATC/CTAG/;
+    $pre2 =~ tr/GATC/CTAG/;
+  }
+  $pre1 =~ s/[^GATC.]/./g;
+  $pre2 =~ s/[^GATC.]/./g;
+  return ($pre2.$pre1, $base);
+}
+
+sub get_2base {
+  my ($sequence, $position, $strand) = @_;
+  # position should be 0-based
+  # nt should not be reverse complemented - we need to keep track of polymorphism
+  # we are giving the preceding and the indicated base here
+  my $preceding;
+  my $indicated;
+  my $base;	# indicated is actually the same as base...unless mapped to
+		# negative strand. We want to give positive strand base
+		# (which is returned by samtools) but context requires revcomp
+  my $temp;
+  my $l;
+
+  $l = length($sequence);
+  if ($strand > 0) {
+    if ($position > 0) {
+      ($preceding, $indicated) = unpack("x" . ($position - 1) . "A1A1", $sequence);
+    } else {
+      $preceding = ".";
+      $indicated = unpack("A1", $sequence);
+    }
+    $base = $indicated;
+  } else {
+    if ($position >= $l-1) {
+      $preceding = ".";
+      $indicated = unpack("x" . ($l-1) . "A1", $sequence);
+    } elsif ($position == 0) {
+      ($indicated, $preceding) = unpack("A1A1", $sequence);
+    } else {
+      ($indicated, $preceding) = unpack("x" . $position . "A1A1", $sequence);
+    }
+    $base = $indicated;
+    $preceding =~ tr/GATC/CTAG/;
+    $indicated =~ tr/GATC/CTAG/;
+  }
+  $preceding =~ s/[^GATC.]/./g;
+  $indicated =~ s/[^GATC.]/./g;
+  return ($preceding.$indicated, $base);
 }
 
 sub pdlhist {
@@ -1069,7 +1244,7 @@ sub quality_svd {
     wcols(pdl($MINQUAL..$MAXQUAL), $recalibrated, $hist, $correct, $error, { COLSEP => "\t" });
   }
   
-  return($recalibrated);
+  return($recalibrated, $s->at(0) * $s->at(0) / inner($s, $s));
 }
 
 sub gatk_header {
@@ -1177,7 +1352,7 @@ sub gatk_table1 {
 
   foreach $i (0..$#qbasis) {
     next if !$hist[$i];
-    push @return, sprintf("%-12s%13d  M% 26.4f% 14d% *.2f\n", $rg, $qbasis[$i], $empirical[$i], $hist[$i], $width, $error[$i]);
+      push @return, sprintf("%-12s%13d  M% 26.4f% 14d% *.2f\n", $rg, $qbasis[$i], $empirical[$i], $hist[$i], $width, $error[$i]);
   }
 
   return @return;
