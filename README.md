@@ -2,7 +2,12 @@
 Lacer: Accurate Base Quality Score Recalibration using Linear Algebra  
 Version: 0.42
 
+Lacepr: A fast replacement to rewrite recalibrated base quality scores in bam files
+Version: 0.1
+
 Lacer takes a BAM file and produces a recalibration file similar to GATK's BaseRecalibrator.  The resulting recalibration file can be used in GATK's PrintReads to perform a recalibration.
+
+Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as GATK. It's much (~3x) faster but does less error checking.
 
 Installation / Requirements
 ---------------------------
@@ -28,6 +33,11 @@ To check the availability of these modules, you can run:
 
 replacing "Bio::DB::Sam" with any of the modules from the above list.  If there is no error, that module is available.
 
+For Lacepr, the basic one needs samtools and htslib libraries. It has only been tested with samtools-1.1 and htslib-1.1 and later. To compile, first set the location of the samtools and htslib libraries, then execute the following command in the lacepr subdirectory:
+SAMTOOLS=<path-to-samtools>
+HTSLIB=<path-to-htslib>
+gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -o lacepr
+
 Usage
 -----
 A help screen describing options to Lacer is displayed if you run the script without any arguments:
@@ -48,6 +58,9 @@ The output file, recal.txt, can then be used in the GATK workflow:
      -o recal.bam \
      -I input.bam \
      -BQSR recal.txt
+
+Alternatively, lacepr can be used:
+> ./lacepr input.bam recal.txt recal.bam
 
 Note: The format of the recalibration table required by GATK has changed frequently in recent versions.  Depending on the version of GATK you are using, you may need to specify additional parameters to Lacer to produce the appropriate format file.
 For GATK version 2.7:
