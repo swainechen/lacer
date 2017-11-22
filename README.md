@@ -1,5 +1,5 @@
 # lacer
-Lacer: Accurate Base Quality Score Recalibration using Linear Algebra  
+Lacer: Accurate Base Quality Score Recalibration using Linear Algebra
 Version: 0.424
 
 Lacepr: A fast replacement to rewrite recalibrated base quality scores in bam files
@@ -15,19 +15,19 @@ Installation / Requirements
 Lacer is a perl script.  It has only been tested on Perl version 5.10 and later.
 
 It depends on the following Perl modules available in a standard Perl installation or on CPAN:
-Bio::DB::Sam  
-Data::Dumper  
-Getopt::Long  
-Memory::Usage  
-PDL  
-PDL::MatrixOps  
-PDL::NiceSlice  
-PDL::Parallel::threads  
-Term::ProgressBar  
-Thread::Queue  
-threads  
-threads::shared  
-
+- Bio::DB::Sam
+- Data::Dumper
+- Getopt::Long
+- Memory::Usage
+- PDL
+- PDL::MatrixOps
+- PDL::NiceSlice
+- PDL::Parallel::threads
+- Term::ProgressBar
+- Thread::Queue
+- threads
+- threads::shared
+-
 To check the availability of these modules, you can run:
 ```
 perl -e 'use Bio::DB::Sam'
@@ -71,7 +71,7 @@ java -Xmx2g -jar GenomeAnalysisTK.jar \
      -BQSR recal.txt
 ```
 
-Alternatively, lacepr can be used:
+Alternatively, the provided lacepr command can be used:
 ```
 ./lacepr input.bam recal.txt recal.bam
 ```
@@ -87,17 +87,17 @@ For GATK version 2.8 or later:
 ./lacer.pl -bam input.bam -reference reference.fasta -rgfield PU -outfile recal.txt
 ```
 
+If you are lacepr, simply use the default.
+
 Known Issues
 ------------
-When running Lacer, the following warning will appear:  
+When running Lacer, the following warning will appear:
 Subroutine PDL::CLONE_SKIP redefined at /mnt/software/lib/perl5/5.10.1/PDL/Parallel/threads.pm line 39.
 
 This warning can be safely ignored.
 
 Contact/citation/information
 -------------------
-slchen@gis.a-star.edu.sg, swainechen@gmail.com  
-Preprint: https://doi.org/10.1101/130732  
-Citation: Chung JC and Chen SL. 2017. "Lacer: Accurate Base Quality Score Recalibration For Improving Variant Calling From Next-Generation Sequencing Data In Any Organism." bioRxiv doi: https://doi.org/10.1101/130732  
-
-
+slchen@gis.a-star.edu.sg, swainechen@gmail.com
+Preprint: https://doi.org/10.1101/130732
+Citation: Chung JC and Chen SL. 2017. "Lacer: Accurate Base Quality Score Recalibration For Improving Variant Calling From Next-Generation Sequencing Data In Any Organism." bioRxiv doi: https://doi.org/10.1101/130732
