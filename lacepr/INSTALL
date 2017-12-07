@@ -6,7 +6,7 @@ HTSLIB=<path-to-htslib>
 # samtools/htslib prior to 1.3:
 gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -o lacepr
 # samtools/htslib as of 1.6:
-gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -llzma -lbz2 -lcurl -o lacepr
+gcc -I$SAMTOOLS -I$HTSLIB lacepr.c -L$SAMTOOLS -L$HTSLIB -lbam -l:libhts.a -lz -lpthread -lm -llzma -lbz2 -o lacepr
 
 # To install lacepr:
 # Move the lacepr executable to somewhere on your path
