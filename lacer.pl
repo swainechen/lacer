@@ -1,8 +1,12 @@
 #!/usr/bin/perl
 #
 
-my $lacer_version = 0.424;
+my $lacer_version = 0.425;
 
+# version 0.425
+# Replicate rows prior to svd to make sure we have more rows than columns
+# This appears to be a new check in PDL somewhere between 2.007 and 2.018
+#
 # version 0.424
 # change -dump to a flag instead of requiring an integer argument
 # add percentage to # of recalibration bases on status display
@@ -1158,12 +1162,23 @@ sub quality_svd {
   my $recalibrated;
   my $errorperc;
   my $u0;
+  my ($n, $m, $i, $append);
 
   # center the columns of the matrix, do the svd
   $tosvd = $matrix->(,0:-2)->copy;
   $center = average($tosvd->xchg(0,1));
   $tosvd -= $center;
+  $n = $tosvd->dim(0);
+  $m = $tosvd->dim(1);
+  # somewhere between 2.007 and 2.018 there is a check for $m > $n in the svd. Just copy the rows until we have enough.
+  if ($m < $n) {
+    $append = $tosvd->copy;
+    foreach $i (1..int($n/$m)) {
+      $tosvd = $tosvd->glue(1, $append);
+    }
+  }
   ($u, $s, $v) = svd($tosvd);
+  $u = $u->(,0:($m-1));
   $fit = $s->at(0)*$s->at(0)/sum($s*$s);
 
   # try to find the best min and max dim 0 coordinate
