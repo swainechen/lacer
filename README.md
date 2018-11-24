@@ -1,13 +1,13 @@
 # lacer
-Lacer: Accurate Base Quality Score Recalibration using Linear Algebra
+Lacer: Accurate Base Quality Score Recalibration using Linear Algebra  
 Version: 0.424
 
-Lacepr: A fast replacement to rewrite recalibrated base quality scores in bam files
+Lacepr: A fast replacement to rewrite recalibrated base quality scores in bam files  
 Version: 0.1
 
-Lacer takes a BAM file and produces a recalibration file similar to GATK's BaseRecalibrator.  The resulting recalibration file can be used in GATK's PrintReads to perform a recalibration.
+Lacer takes a BAM file and produces a recalibration file similar to GATK's BaseRecalibrator. The algorithm is distinct from GATK's, however, and is usable on non-human data without requirement to already have a set of known variants. The resulting recalibration file can be used in GATK's PrintReads to perform a recalibration.
 
-Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as GATK. It's much (~3x) faster but does less error checking.
+Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as that used in GATK. It's much (~3x) faster but does less error checking.
 
 Installation / Requirements
 ---------------------------
@@ -35,7 +35,7 @@ perl -e 'use Bio::DB::Sam'
 
 replacing "Bio::DB::Sam" with any of the modules from the above list.  If there is no error, that module is available.
 
-For Lacepr, the basic one needs samtools and htslib libraries. It has only been tested with samtools-1.1 and htslib-1.1 and later. To compile, first set the location of the samtools and htslib libraries, then execute the following command in the lacepr subdirectory:
+For Lacepr, one needs the samtools and htslib libraries. It has only been tested with samtools-1.1 and htslib-1.1 and later. To compile, first set the location of the samtools and htslib libraries, then execute the following command in the lacepr subdirectory:
 ```
 SAMTOOLS=path-to-samtools
 HTSLIB=path-to-htslib
@@ -87,7 +87,7 @@ For GATK version 2.8 or later:
 ./lacer.pl -bam input.bam -reference reference.fasta -rgfield PU -outfile recal.txt
 ```
 
-If you are lacepr, simply use the default.
+If you are using lacepr to print out recalibrated reads, simply use the defaults for lacer.
 
 Known Issues
 ------------
