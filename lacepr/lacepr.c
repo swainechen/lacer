@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <float.h>
 #include <math.h>
+#include <ctype.h>
 #include "sam.h"
+#include "sam_header.h"
 #include "htslib/sam.h"
 #include "lacepr.h"
 
