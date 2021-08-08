@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <unistd.h>
+#include <getopt.h>
 #include <float.h>
 #include <math.h>
 #include <ctype.h>
@@ -7,7 +9,7 @@
 #include "htslib/sam.h"
 #include "lacepr.h"
 
-const char *version = "0.1";
+const char *version = "0.11";
 
 cache_t *cache;
 
@@ -337,9 +339,35 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
 
 int main (int argc, char *argv[])
 {
-  if (argc == 1) {
+  int getopt_c;
+  char *inbam;
+  char *outbam;
+  char *recal_file;
+  char *rg_field = "PU";
+  while (1) {
+    int option_index = 0;
+    static struct option long_options[] = {
+      {"field", required_argument, 0, 'f'},
+      {"in",    required_argument, 0, 'i'},
+      {"recal", required_argument, 0, 'r'},
+      {"out",   required_argument, 0, 'o'},
+      {0, 0, 0, 0}
+    };
+    getopt_c = getopt_long(argc, argv, "f:i:r:o:", long_options, &option_index);
+    if (getopt_c == -1)
+      break;
+    switch (getopt_c) {
+      case 'f': rg_field = optarg; break;
+      case 'i': inbam = optarg; break;
+      case 'r': recal_file = optarg; break;
+      case 'o': outbam = optarg; break;
+    }
+  }
+  if(strlen(rg_field) > 2) { rg_field[2] = '\0'; }
+
+  if (access(inbam, F_OK) != 0 || access(recal_file, F_OK) != 0) {
     fprintf(stderr, "Lacepr version %s; headers %s\n", version, header_version);
-    fprintf(stderr, "Usage: lacepr <in.bam> <recal.tab> <out.bam>\n");
+    fprintf(stderr, "Usage: lacepr [ --field <PU|LB|SM> ] --in <in.bam> --recal <recal.tab> --out <out.bam>\n");
     return 1;
   }
 
@@ -381,21 +409,23 @@ int main (int argc, char *argv[])
   quality = NULL;
   rg = 0;
 
-  samfile_t *fp = samopen(argv[1], "rb", 0);
-  samfile_t *outfp = samopen(argv[3], "wb", fp->header);
+  samfile_t *fp = samopen(inbam, "rb", 0);
+  samfile_t *outfp = samopen(outbam, "wb", fp->header);
   bam_header_t *bh = fp->header;
 
   iter = sam_header_parse2(fp->header->text);
   sam_header_parse2(fp->header->text);
   rglist = malloc(MAX_RG * sizeof(char*));
-  while (iter = sam_header2key_val(iter, "RG", "ID", "SM", &key, &val)) {
+  num_rg = 0;
+  while (iter = sam_header2key_val(iter, "RG", "ID", rg_field, &key, &val)) {
     rglist[num_rg] = malloc(MAX_FIELD * sizeof(char));
-    strcpy(rglist[num_rg], key);
+//    strcpy(rglist[num_rg], key);
+    strcpy(rglist[num_rg], val);
     num_rg++;
   }
   init_cache(num_rg);
   recaldata = init_recal(num_rg);
-  read_recal(argv[2], rglist, num_rg, recaldata);
+  read_recal(recal_file, rglist, num_rg, recaldata);
   b = bam_init1();
   while ((bytes = samread(fp, b)) > 0) {
     qlen = b->core.l_qseq;
@@ -457,41 +487,3 @@ int main (int argc, char *argv[])
   samclose(fp);
   return(0);
 }
-
-//  bamFile fp = bam_open(argv[1], "r");
-//  bamFile outfp = bam_open(argv[3], "w");
-//  bam_header_t *bh = bam_header_read(fp);
-//  bam_header_write(outfp, bh);
-//  bam_header_destroy(bh);
-//  bam_close(outfp);
-//  bam_close(fp);
-
-//  while ((bytes = bam_read1(fp, b)) > 0) {
-//    bam_write1(outfp, b);
-//  printf("read 1 pos %d, bytes %d qname %s\n", b->core.pos, bytes, bam1_qual(b));
-//  printf("seq %s\n", (char*)bam1_seq(b));
-//    printf("offset %d, buffer %d, sequence %d, char %c, nt %c\n", i, buffer[i], sequence[i], sequence[i], bam_nt16_rev_table[buffer[i]]);
-//  printf("seq %s\n", (char*)buffer);
-//  printf("  qual: %s\n", bam1_qual(b));
-//  printf(" macro: %s\ndirect: %s\n", (char*)sequence, (char*)(b->data+b->core.n_cigar*4+b->core.l_qname+((b->core.l_qseq+1)>>1)));
-//  printf("  qual: %s\n", (char*)buffer);
-//  printf("data %d, n_cigar %d, l_qname %d, l_qseq %d\n", b->data, b->core.n_cigar, b->core.l_qname, b->core.l_qseq);
-//    printf("offset %d, qual %s, char %c, num %d, 33c %c, 33n %d\n", i, (char*)(asdf + i), asdf[i], asdf[i], asdf[i]+33, asdf[i]+33);
-//    printf("offset %d, char %c, num %d, 33c %c, 33n %d\n", i, asdf[i], asdf[i], asdf[i]+33, asdf[i]+33);
-//  printf("sequence:\n%s\n", (char*)(b->data+b->core.n_cigar*4+b->core.l_qname));
-//  printf("quality:\n%s\n", (char*)(b->data+b->core.n_cigar*4+b->core.l_qname+((b->core.l_qseq+1)>>1)));
-//  if (b->core.flag & 16) { // reverse complement
-//    for (i = 0; i < qlen>>1; ++i) {
-//      int8_t t = seq_comp_table[sequence[qlen - 1 - i]];
-//      sequence[qlen - 1 - i] = seq_comp_table[sequence[i]];
-//      sequence[i] = t;
-//    }
-//    if (qlen&1) sequence[i] = seq_comp_table[sequence[i]];
-//  }
-//  if (b->core.flag & 16) { // reverse
-//    for (i = 0; i < qlen>>1; ++i) {
-//      int8_t t = quality[qlen - 1 - i];
-//      quality[qlen - 1 - i] = quality[i];
-//      quality[i] = t;
-//    }
-//  }
