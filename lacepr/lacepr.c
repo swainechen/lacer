@@ -483,7 +483,7 @@ int main (int argc, char *argv[])
   char *infastq;
   char *outfile;
   char *recal_file;
-  char *use_rg;
+  char *use_rg = NULL;
   char *rg_field = "PU";
   int read_pairnum = 1;
   while (1) {
@@ -516,16 +516,18 @@ int main (int argc, char *argv[])
   if ( ( access(inbam, F_OK) != 0 && access(infastq, F_OK) != 0 ) ||
        access(recal_file, F_OK) != 0 ) {
     fprintf(stderr, "Lacepr version %s; headers %s\n", version, header_version);
-//    fprintf(stderr, "Usage: lacepr [ --field <PU|LB|SM> ] [ --rg <string> ] --bam <in.bam> --recal <recal.tab> --out <out.bam>\n");
-//    fprintf(stderr, "       lacepr [ --field <PU|LB|SM> ] [ --rg <string> ] --fastq <input fastq> [ --pair 1|2 ] --recal <recal.tab> --out <output fastq>\n");
-    fprintf(stderr, "Usage: lacepr [ --field <PU|LB|SM> ] --bam <in.bam> --recal <recal.tab> --out <out.bam>\n");
-    fprintf(stderr, "       lacepr [ --field <PU|LB|SM> ] --fastq <input fastq> [ --pair 1|2 ] --recal <recal.tab> --out <output fastq>\n");
-    fprintf(stderr, "\nTakes recalibration file from lacer or GATK, applies it to a bam file or fastq file\n");
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "  lacepr [ options ] --bam <in.bam> --recal <recal file> --out <out.bam>\n");
+    fprintf(stderr, "  lacepr [ options ] --fastq <in fastq.gz> --recal <recal file> --out <out fastq.gz>\n");
+    fprintf(stderr, "\nOptions:\n");
+    fprintf(stderr, "  --field PU|LB|SM  for bam input, header field with read group information\n");
+    fprintf(stderr, "  --rg <string>     for bam/fastq input, force usage of data for this read group\n");
+    fprintf(stderr, "                    from the recalibration file. Default PU.\n");
+    fprintf(stderr, "  --pair 1|2        for fastq input, specify R1/R2 read. Default 1.\n");
+    fprintf(stderr, "\nTakes recalibration file from lacer or GATK, applies it to a bam or fastq file\n");
     fprintf(stderr, "Will output bam if the input is bam, fastq if the input is fastq\n");
-    fprintf(stderr, "Default read group field is PU.\n");
-//    fprintf(stderr, "Can force use of a read group in the recalibration file with --rg (this is needed for processing fastq files). If this doesn't match, will use the data for the first read group found.\n");
-    fprintf(stderr, "Currently, when processing fastq files, will just use the data for the first read group in the recalibation file.\n");
-    fprintf(stderr, "If --pair is not specified, will assume any fastq file is for the first read (R1)\n");
+    fprintf(stderr, "Can force use of a read group in the recalibration file with --rg.\n");
+    fprintf(stderr, "When processing fastq files, will default to the first read group in the recalibation file if --rg is not specified.\n");
     fprintf(stderr, "By default, will output gzipped fastq if processing a fastq file\n");
     fprintf(stderr, "\nNOTE: For clarity, only long options (--field, --fastq, etc.) are allowed\n");
     return 1;
@@ -564,6 +566,7 @@ int main (int argc, char *argv[])
   char *rgID;
   char *rg_search;
   int rg_index;
+  int force_rg_index = -1;
 
   sequence = 0;
   quality = NULL;
@@ -574,6 +577,12 @@ int main (int argc, char *argv[])
   rglist[0] = NULL;
   recaldata = init_recal(1);
   num_rg = read_recal(recal_file, rglist, recaldata);
+  if (use_rg != NULL) {
+    force_rg_index = get_rg_index(rglist, use_rg, false);
+    if (force_rg_index == -1) {
+      fprintf(stderr, "Can't find data in recalibration file %s for read group %s, aborting.\n", recal_file, use_rg);
+    }
+  }
   init_cache(num_rg);
 
   if (access(inbam, F_OK) == 0) {	// we are processing a bam file
@@ -582,9 +591,11 @@ int main (int argc, char *argv[])
     bam_header_t *bh = fp->header;
     // set up rg_data so we can map from IDs back to read groups, which then
     // will get matched in rglist to choose the right recalibration data
-    good_rgfield_index = read_group_check(fp, rglist, num_rg, rg_data, rg_field);
-    if (good_rgfield_index == -1) {
-      return(-1);
+    if (force_rg_index == -1) {
+      good_rgfield_index = read_group_check(fp, rglist, num_rg, rg_data, rg_field);
+      if (good_rgfield_index == -1) {
+        return(-1);
+      }
     }
 
     b = bam_init1();
@@ -607,60 +618,67 @@ int main (int argc, char *argv[])
       quality = backup + offset;
 
       // deal with read groups again
-      rg = bam_aux_get(b, "RG");
-      rgID = malloc(sizeof(char) * strlen(rg));
-      if (rg[0] == 90) {
-        strcpy(rgID, rg + 1);
-      }
-      // rg comes from the bam alignment structure as an ID
-      // the ID is listed in the @RG lines in the sam header
-      // This should then go to one of the RG fields (PU, SM, LB)
-      // Then we can pick up where this is in rglist
-      for (i = 0; i < MAX_RG; i++) {
-        if (rg_data[good_rgfield_index][i]->Value[0] == '\0') {
-          break;
+      if (force_rg_index == -1) {
+        rg = bam_aux_get(b, "RG");
+        rgID = malloc(sizeof(char) * strlen(rg));
+        if (rg[0] == 90) {
+          strcpy(rgID, rg + 1);
         }
-        if (strcmp(rg_data[good_rgfield_index][i]->ID, rgID) == 0) {
-          rg_search = malloc(sizeof(char) * (strlen(rg_data[good_rgfield_index][i]->Value)+1));
-          strcpy(rg_search, rg_data[good_rgfield_index][i]->Value);
-          break;
+        // rg comes from the bam alignment structure as an ID
+        // the ID is listed in the @RG lines in the sam header
+        // This should then go to one of the RG fields (PU, SM, LB)
+        // Then we can pick up where this is in rglist
+        for (i = 0; i < MAX_RG; i++) {
+          if (rg_data[good_rgfield_index][i]->Value[0] == '\0') {
+            break;
+          }
+          if (strcmp(rg_data[good_rgfield_index][i]->ID, rgID) == 0) {
+            rg_search = malloc(sizeof(char) * (strlen(rg_data[good_rgfield_index][i]->Value)+1));
+            strcpy(rg_search, rg_data[good_rgfield_index][i]->Value);
+            break;
+          }
         }
-      }
-      if (rg_search == NULL) {
-        fprintf(stderr, "Can't find read group for ID %s; not recalibrating this\n", rgID);
-      } else {
-        rg_index = get_rg_index(rglist, rg_search, false);
 
-        for (i = 0; i < qlen; i++) {
-          sequence[i] = bam_seqi(rawdata, i);
+        if (rg_search == NULL) {
+          fprintf(stderr, "Can't find read group for ID %s; not recalibrating this\n", rgID);
+        } else {
+          rg_index = get_rg_index(rglist, rg_search, false);
         }
-        // this is how they access qualities in bam.h
-        q_pointer = b->data + b->core.n_cigar * 4 + b->core.l_qname + ((b->core.l_qseq+1)>>1);
-        for (i = 0; i < qlen; i++) {
-          // get context and cycle
-          if (b->core.flag & 16) {	// mapped to reverse strand
-            current = nt16_table_comp[sequence[i]];
-            if (i < qlen-1) {
-              preceding = nt16_table_comp[sequence[i+1]];
-            } else {
-              preceding = '.';
-            }
-            cycle = qlen - i;
-          } else {	// mapped to forward strand
-            current = nt16_table[sequence[i]];
-            if (i > 0) {
-              preceding = nt16_table[sequence[i-1]];
-            } else {
-              preceding = '.';
-            }
-            cycle = i + 1;
+      }
+
+      for (i = 0; i < qlen; i++) {
+        sequence[i] = bam_seqi(rawdata, i);
+      }
+      // this is how they access qualities in bam.h
+      q_pointer = b->data + b->core.n_cigar * 4 + b->core.l_qname + ((b->core.l_qseq+1)>>1);
+      for (i = 0; i < qlen; i++) {
+        // get context and cycle
+        if (b->core.flag & 16) {	// mapped to reverse strand
+          current = nt16_table_comp[sequence[i]];
+          if (i < qlen-1) {
+            preceding = nt16_table_comp[sequence[i+1]];
+          } else {
+            preceding = '.';
           }
-          // take care of cycle for first / second read
-          if (b->core.flag & 128) {	// second of a pair
-            cycle = -cycle;
+          cycle = qlen - i;
+        } else {	// mapped to forward strand
+          current = nt16_table[sequence[i]];
+          if (i > 0) {
+            preceding = nt16_table[sequence[i-1]];
+          } else {
+            preceding = '.';
           }
-          debug && fprintf(stderr, "rgID %s, cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", rgID, cycle, sequence[i], preceding, current, quality[i], newq(quality[i], cycle, preceding, current, recaldata, rg_index));
+          cycle = i + 1;
+        }
+        // take care of cycle for first / second read
+        if (b->core.flag & 128) {	// second of a pair
+          cycle = -cycle;
+        }
+        debug && fprintf(stderr, "rgID %s, cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", rgID, cycle, sequence[i], preceding, current, quality[i], newq(quality[i], cycle, preceding, current, recaldata, rg_index));
+	if (force_rg_index == -1) {
           q_pointer[i] = newq(quality[i], cycle, preceding, current, recaldata, rg_index);
+        } else {
+          q_pointer[i] = newq(quality[i], cycle, preceding, current, recaldata, force_rg_index);
         }
       }
       samwrite(outfp, b);
@@ -684,7 +702,11 @@ int main (int argc, char *argv[])
     }
 
     // we will not have read groups by default - take the first in the recal table
-    rg_index = 0;
+    if (force_rg_index != -1) {
+      rg_index = force_rg_index;
+    } else {
+      rg_index = 0;
+    }
 
     // read fastq and recalibrate
     // we are going to only output gzipped files
