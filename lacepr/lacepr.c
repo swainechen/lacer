@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <float.h>
@@ -7,10 +8,20 @@
 #include "sam.h"
 #include "sam_header.h"
 #include "htslib/sam.h"
+#include "htslib/kseq.h"
 #include "lacepr.h"
 
-const char *version = "0.11";
+const char *version = "0.2";
+// from bam_import.c
+// char *bam_nt16_rev_tabl            = "=ACMGRSVTWYHKDBN";
+// the appropriate complement would be
+// char *bam_nt16_rev_tabl_complement = "=TGKCYSBAWRDMHVN";
+// we're only going to accept "real" nts
+const char *nt16_table      = ".AC.G...T.......";
+const char *nt16_table_comp = ".TG.C...A.......";
+const char* const KNOWN_RGFIELD[] = { "PU", "LB", "SM" };
 
+KSEQ_INIT(gzFile, gzread);
 cache_t *cache;
 
 void init_cache (int n) {
@@ -94,12 +105,14 @@ int delta (int origq, int obs, double err) {
   }
 }
 
-int newq (int8_t origq, char *rg, int cycle, char preceding, char current, recal_t *recaldata, char** rglist, int num_rg) {
+int newq (int8_t origq, int cycle, char preceding, char current, recal_t *recaldata, int recaldata_index) {
   int nq = 40;
   int running_q;
   int adjust_q = 0;
   int adjust_cyc = 0;
   int adjust_con = 0;
+  char *rg_search = NULL;
+  int i;
   char context[3];
   context[0] = preceding;
   context[1] = current;
@@ -107,32 +120,27 @@ int newq (int8_t origq, char *rg, int cycle, char preceding, char current, recal
   int con_i = get_context_index(context);
   int cyc_i = get_cycle_index(cycle);
 
-  int rgindex = get_rg_index(rglist, num_rg, rg);
-  if (rgindex == -1) {
-    return origq;
+  if (cache[recaldata_index][origq][con_i][cyc_i] > 0) {
+    return cache[recaldata_index][origq][con_i][cyc_i];
   }
 
-  if (cache[rgindex][origq][con_i][cyc_i] > 0) {
-    return cache[rgindex][origq][con_i][cyc_i];
-  }
-
-  running_q = recaldata[rgindex].Quality;
-  if (recaldata[rgindex].OrigQual[origq].Observations > 0) {
-    adjust_q = delta(running_q, recaldata[rgindex].OrigQual[origq].Observations, recaldata[rgindex].OrigQual[origq].Errors);
-//printf("base %d, obs %d, err %f, adjust_q %d\n", running_q, recaldata[rgindex].OrigQual[origq].Observations, recaldata[rgindex].OrigQual[origq].Errors, adjust_q);
+  running_q = recaldata[recaldata_index].Quality;
+  if (recaldata[recaldata_index].OrigQual[origq].Observations > 0) {
+    adjust_q = delta(running_q, recaldata[recaldata_index].OrigQual[origq].Observations, recaldata[recaldata_index].OrigQual[origq].Errors);
+//printf("base %d, obs %d, err %f, adjust_q %d\n", running_q, recaldata[recaldata_index].OrigQual[origq].Observations, recaldata[recaldata_index].OrigQual[origq].Errors, adjust_q);
   }
   running_q += adjust_q;
  
-  if (recaldata[rgindex].Context[con_i].OrigQual[origq].Observations > 0) {
-    adjust_con = delta(running_q, recaldata[rgindex].Context[con_i].OrigQual[origq].Observations, recaldata[rgindex].Context[con_i].OrigQual[origq].Errors);
-//printf("base %d, context %s, index %d, obs %d, err %f, adjust_q %d\n", running_q, context, con_i, recaldata[rgindex].Context[con_i].OrigQual[origq].Observations, recaldata[rgindex].Context[con_i].OrigQual[origq].Errors, adjust_con);
+  if (recaldata[recaldata_index].Context[con_i].OrigQual[origq].Observations > 0) {
+    adjust_con = delta(running_q, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Observations, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Errors);
+//printf("base %d, context %s, index %d, obs %d, err %f, adjust_q %d\n", running_q, context, con_i, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Observations, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Errors, adjust_con);
   }
-  if (recaldata[rgindex].Cycle[get_cycle_index(cycle)].OrigQual[origq].Observations > 0) {
-    adjust_cyc = delta(running_q, recaldata[rgindex].Cycle[cyc_i].OrigQual[origq].Observations, recaldata[rgindex].Cycle[cyc_i].OrigQual[origq].Errors);
-//printf("base %d, cycle %d, index %d, obs %d, err %f, adjust_q %d\n", running_q, cycle, cyc_i, recaldata[rgindex].Cycle[cyc_i].OrigQual[origq].Observations, recaldata[rgindex].Cycle[cyc_i].OrigQual[origq].Errors, adjust_cyc);
+  if (recaldata[recaldata_index].Cycle[get_cycle_index(cycle)].OrigQual[origq].Observations > 0) {
+    adjust_cyc = delta(running_q, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Observations, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Errors);
+//printf("base %d, cycle %d, index %d, obs %d, err %f, adjust_q %d\n", running_q, cycle, cyc_i, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Observations, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Errors, adjust_cyc);
   }
   nq = running_q + adjust_con + adjust_cyc;
-//  printf ("orig %d prior %d, cycle %d, context %s, adjust %d %d %d, new %d\n\n\n", origq, recaldata[rgindex].Quality, cycle, context, adjust_q, adjust_con, adjust_cyc, nq);
+//  printf ("orig %d prior %d, cycle %d, context %s, adjust %d %d %d, new %d\n\n\n", origq, recaldata[recaldata_index].Quality, cycle, context, adjust_q, adjust_con, adjust_cyc, nq);
   if (nq == 0) {
     nq = origq;
   }
@@ -142,18 +150,53 @@ int newq (int8_t origq, char *rg, int cycle, char preceding, char current, recal
   if (nq > MAX_REASONABLE_Q) {
     nq = MAX_REASONABLE_Q;
   }
-  cache[rgindex][origq][con_i][cyc_i] = nq;
+  cache[recaldata_index][origq][con_i][cyc_i] = nq;
   return nq;
 }
 
-int get_rg_index (char** rglist, int num_rg, char* rg) {
+int get_rg_index (char** rglist, char* rg, bool insert) {
+  // we build the list of read groups (if insert) and help access them here
+  // we always track the end of the array with a null in the next element
   int i;
-  for (i=0; i < num_rg; i++) {
-    if (strcmp(rg, rglist[i]) == 0) {
-      return(i);
+  if (rglist[0] == NULL) {
+    if (insert) {
+      rglist[0] = malloc(MAX_FIELD * sizeof(char));
+      strcpy(rglist[0], rg);
+      rglist[1] = NULL;
+      return(0);
+    } else {
+      return(-1);
+    }
+  } else {
+    for (i=0; i < MAX_RG; i++) {
+      if (rglist[i] == NULL) {
+        if (insert) {
+          rglist[i] = malloc(MAX_FIELD * sizeof(char));
+          strcpy(rglist[i], rg);
+	  if (i+1 < MAX_RG) { rglist[i+1] = NULL; }
+	  return(i);
+        } else {
+          return(-1);
+        }
+      }
+      if (strcmp(rg, rglist[i]) == 0) {
+        return(i);
+      }
     }
   }
+  // we should never actually get here
   return(-1);
+}
+
+// convert bases to integer encoding as per htslib / samtools
+int nt2int (char s) {
+  switch (s) {
+    case 'A': return(1);
+    case 'C': return(2);
+    case 'G': return(4);
+    case 'T': return(8);
+    default : return(0);
+  }
 }
 
 // we're really only going to assume there is 2 base context
@@ -222,9 +265,10 @@ recal_t* init_recal (int num_rg) {
   return data;
 }
 
-void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
+int read_recal (char* file, char** rglist, recal_t *data) {
   char *in = 0;
   size_t n = 0;
+  int num_rg = 0;
   ssize_t bytes;
   char *tkn;
   int i;
@@ -240,7 +284,10 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
   double err;
   int rgindex;
   int covindex;
+  point_recal_t *temp_table0;
+
   FILE *r = fopen(file, "r");
+  temp_table0 = malloc(MAX_RG * sizeof(point_recal_t));
 
   while ( (bytes = getline(&in, &n, r)) != -1 ) {
     if (bytes > 0) {
@@ -258,19 +305,36 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
               // 4 - Observations
               // 5 - Errors
               bytes = getline(&in, &n, r);
-              i = 0;
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
                 parsed = sscanf(in, "%s %s %lf %lf %d %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
                 if (parsed == 6) {
-                  rgindex = get_rg_index(rglist, num_rg, rg);
-                  data[rgindex].Quality = lround(empqual);
-                  data[rgindex].Observations = obs;
-                  data[rgindex].Errors = err;
+                  rgindex = get_rg_index(rglist, rg, true);
+                  temp_table0[rgindex].Quality = lround(empqual);
+                  temp_table0[rgindex].Observations = obs;
+                  temp_table0[rgindex].Errors = err;
 //printf("rg %s index %d obs %d err %f\n", rg, rgindex, data[rgindex].Observations, data[rgindex].Errors);
 //printf("rg %s index %d obs %d err %f\n", rg, rgindex, obs, err);
                 } else {
-                  printf("Parse error for RecalTable0 on line:\n%s", in);
+                  fprintf(stderr, "Parse error for RecalTable0 on line:\n%s", in);
                 }
+              }
+	      // after this first RecalTable0 we should know the read groups
+	      // and we can allocate memory for the real data structure
+	      for (i = 0; i < MAX_RG; i++) {
+                if (rglist[i] == NULL) {
+                  num_rg = i;
+                  break;
+                }
+              }
+	      if (num_rg == 0) {
+                fprintf(stderr, "Couldn't find any read groups in the recal file\n");
+		return(0);
+              }
+              data = realloc(data, sizeof(recal_t) * num_rg);
+	      for (i = 0; i < num_rg; i++) {
+                data[rgindex].Quality = temp_table0[rgindex].Quality;
+                data[rgindex].Observations = temp_table0[rgindex].Observations;
+                data[rgindex].Errors = temp_table0[rgindex].Errors;
               }
             } else if (strcmp(tkn, "RecalTable1") == 0) {
               // RecalTable1 should be:
@@ -284,12 +348,12 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
                 parsed = sscanf(in, "%s %d %s %lf %d %lf", rg, &qual, eventtype, &empqual, &obs, &err);
                 if (parsed == 6 && strcmp(eventtype,"M") == 0) {
-                  rgindex = get_rg_index(rglist, num_rg, rg);
+                  rgindex = get_rg_index(rglist, rg, false);
                   data[rgindex].OrigQual[qual].Quality = lround(empqual);
                   data[rgindex].OrigQual[qual].Observations = obs;
                   data[rgindex].OrigQual[qual].Errors = err;
                 } else {
-                  printf("Parse error for RecalTable1 on line:\n%s", in);
+                  fprintf(stderr, "Parse error for RecalTable1 on line:\n%s", in);
                 }
 //                printf("Table 1: %d, %s, %d, %s, %f, %d, %f\n", parsed, rg, qual, eventtype, empqual, data[rgindex].OrigQual[qual].Observations, data[rgindex].OrigQual[qual].Errors);
               }
@@ -307,7 +371,7 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
                 parsed = sscanf(in, "%s %d %s %s %s %lf %d %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
                 if (parsed == 8 && strcmp(eventtype,"M") == 0) {
-                  rgindex = get_rg_index(rglist, num_rg, rg);
+                  rgindex = get_rg_index(rglist, rg, false);
                   if (strcmp(covname, "Cycle") == 0) {
                     // covariate is a string but if it's cycle it's a number
                     if ((covindex = get_cycle_index(atoi(covariate))) != -1) {
@@ -326,7 +390,7 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
                   }
                 
                 } else {
-                  printf ("Parse error for RecalTable2 on line:\n%s", in);
+                  fprintf (stderr, "Parse error for RecalTable2 on line:\n%s", in);
                 }
               }
             }
@@ -335,42 +399,139 @@ void read_recal (char* file, char** rglist, int num_rg, recal_t *data) {
       }
     }
   }
+  return(num_rg);
+}
+
+int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_data[3][MAX_RG], char* rg_field) {
+  // read in read groups and collect info to map back later
+  // rg_data has dimensions 3 (for field, use KNOWN_RGFIELD) and MAX_RG
+  // rg_item_t has ID, Value (strings)
+  // we'll track size by making the last item rg_data[i][j] = NULL
+  int rg_ok = -1; // this will return the KNOWN_RGFIELD index that we can use
+  bool rg_check[3];
+  void *iter;
+  const char *key, *val;
+  int i;
+  int j;
+
+  rg_ok = -1;
+  for(i = 0; i < 3; i++) {
+    iter = sam_header_parse2(fp->header->text);
+    j = 0;
+    while (iter = sam_header2key_val(iter, "RG", "ID", KNOWN_RGFIELD[i], &key, &val)) {
+      rg_data[i][j] = malloc(MAX_FIELD * sizeof(rg_item_t));
+      strcpy(rg_data[i][j]->ID, key);
+      strcpy(rg_data[i][j]->Value, val);
+      j++;
+      if (j >= MAX_RG) { break; }
+    }
+    if (j < MAX_RG) {
+      rg_data[i][j] = malloc(sizeof(rg_item_t));
+      rg_data[i][j]->ID[0] = '\0';
+      rg_data[i][j]->Value[0] = '\0';
+    }
+  }
+  for(i = 0; i < 3; i++) {
+    rg_check[i] = true;
+    for(j = 0; j < MAX_RG; j++) {
+      if (rg_data[i][j]->Value[0] == '\0') {
+        if (j == 0) { rg_check[i] = false; }
+        break;
+      } else if (get_rg_index(rglist, rg_data[i][j]->Value, false) < 0) {
+        rg_check[i] = false;
+      }
+    }
+    if (rg_check[i] && strcmp(KNOWN_RGFIELD[i], rg_field) == 0) {
+      rg_ok = i;
+    }
+  }
+  if (rg_ok < 0) {
+    for(i = 0; i < 3; i++) {
+      if (rg_check[i]) {
+        fprintf(stderr, "RG field specified (%s) doesn't seem to match between recal and bam files\nIt looks like using --field %s may work instead\n", rg_field, KNOWN_RGFIELD[i]);
+        break;
+      }
+    }
+    if (i == 3) {
+      fprintf(stderr, "Can't seem to find any match for read groups.\n");
+      fprintf(stderr, "In the recal file, I see:\n");
+      for(j = 0; j < num_rg; j++) {
+        if (rglist[j] == NULL) { break; }
+        fprintf(stderr, "  %s\n", rglist[j]);
+      }
+      fprintf(stderr, "In the bam file, I see:\n");
+      for(i = 0; i < 3; i++) {
+        fprintf(stderr, "- RG Field %s\n", KNOWN_RGFIELD[i]);
+        for(j = 0; j < MAX_RG; j++) {
+          if (rg_data[i][j]->Value[0] == '\0') { break; }
+          fprintf(stderr, "  %s\n", rg_data[i][j]->Value);
+        }
+      }
+    }
+    return(-1);
+  } else {
+    return(rg_ok);
+  }
 }
 
 int main (int argc, char *argv[])
 {
+
+  // handle command line and options, print help if needed
   int getopt_c;
   char *inbam;
-  char *outbam;
+  char *infastq;
+  char *outfile;
   char *recal_file;
+  char *use_rg;
   char *rg_field = "PU";
+  int read_pairnum = 1;
   while (1) {
     int option_index = 0;
     static struct option long_options[] = {
       {"field", required_argument, 0, 'f'},
-      {"in",    required_argument, 0, 'i'},
+      {"bam",   required_argument, 0, 'b'},
+      {"fastq", required_argument, 0, 'q'},
+      {"pair",  required_argument, 0, 'p'},
+      {"rg",    required_argument, 0, 'g'},
       {"recal", required_argument, 0, 'r'},
       {"out",   required_argument, 0, 'o'},
       {0, 0, 0, 0}
     };
-    getopt_c = getopt_long(argc, argv, "f:i:r:o:", long_options, &option_index);
+    getopt_c = getopt_long_only(argc, argv, "f:i:r:o:", long_options, &option_index);
     if (getopt_c == -1)
       break;
     switch (getopt_c) {
       case 'f': rg_field = optarg; break;
-      case 'i': inbam = optarg; break;
+      case 'b': inbam = optarg; break;
+      case 'q': infastq = optarg; break;
+      case 'p': read_pairnum = atoi(optarg); break;
+      case 'g': use_rg = optarg; break;
       case 'r': recal_file = optarg; break;
-      case 'o': outbam = optarg; break;
+      case 'o': outfile = optarg; break;
     }
   }
   if(strlen(rg_field) > 2) { rg_field[2] = '\0'; }
 
-  if (access(inbam, F_OK) != 0 || access(recal_file, F_OK) != 0) {
+  if ( ( access(inbam, F_OK) != 0 && access(infastq, F_OK) != 0 ) ||
+       access(recal_file, F_OK) != 0 ) {
     fprintf(stderr, "Lacepr version %s; headers %s\n", version, header_version);
-    fprintf(stderr, "Usage: lacepr [ --field <PU|LB|SM> ] --in <in.bam> --recal <recal.tab> --out <out.bam>\n");
+//    fprintf(stderr, "Usage: lacepr [ --field <PU|LB|SM> ] [ --rg <string> ] --bam <in.bam> --recal <recal.tab> --out <out.bam>\n");
+//    fprintf(stderr, "       lacepr [ --field <PU|LB|SM> ] [ --rg <string> ] --fastq <input fastq> [ --pair 1|2 ] --recal <recal.tab> --out <output fastq>\n");
+    fprintf(stderr, "Usage: lacepr [ --field <PU|LB|SM> ] --bam <in.bam> --recal <recal.tab> --out <out.bam>\n");
+    fprintf(stderr, "       lacepr [ --field <PU|LB|SM> ] --fastq <input fastq> [ --pair 1|2 ] --recal <recal.tab> --out <output fastq>\n");
+    fprintf(stderr, "\nTakes recalibration file from lacer or GATK, applies it to a bam file or fastq file\n");
+    fprintf(stderr, "Will output bam if the input is bam, fastq if the input is fastq\n");
+    fprintf(stderr, "Default read group field is PU.\n");
+//    fprintf(stderr, "Can force use of a read group in the recalibration file with --rg (this is needed for processing fastq files). If this doesn't match, will use the data for the first read group found.\n");
+    fprintf(stderr, "Currently, when processing fastq files, will just use the data for the first read group in the recalibation file.\n");
+    fprintf(stderr, "If --pair is not specified, will assume any fastq file is for the first read (R1)\n");
+    fprintf(stderr, "By default, will output gzipped fastq if processing a fastq file\n");
+    fprintf(stderr, "\nNOTE: For clarity, only long options (--field, --fastq, etc.) are allowed\n");
     return 1;
   }
 
+  // main declarations
   bam1_t *b;
   uint8_t *rawdata;
   int8_t *sequence;
@@ -381,13 +542,12 @@ int main (int argc, char *argv[])
   char *rg_const = "foo";
   char **rglist;
   int num_rg = 0;
-  const char *key, *val;
   char *temp;
-  void *iter;
   char preceding;
   char current;
   int cycle;
   int i;
+  int j;
   int debug = 0;
   int qlen;
   int max_length = 0;
@@ -397,93 +557,172 @@ int main (int argc, char *argv[])
   recal_t *recaldata;
   char *q_pointer;
   uint8_t *q_temp;
-// from bam_import.c
-// char *bam_nt16_rev_tabl            = "=ACMGRSVTWYHKDBN";
-// the appropriate complement would be
-// char *bam_nt16_rev_tabl_complement = "=TGKCYSBAWRDMHVN";
-// we're only going to accept "real" nts
-  const char *nt16_table      = ".AC.G...T.......";
-  const char *nt16_table_comp = ".TG.C...A.......";
+  int good_rgfield_index;
+
+  rg_item_t *rg_data[3][MAX_RG];
+  char *forceable_rg;
+  char *rgID;
+  char *rg_search;
+  int rg_index;
 
   sequence = 0;
   quality = NULL;
   rg = 0;
 
-  samfile_t *fp = samopen(inbam, "rb", 0);
-  samfile_t *outfp = samopen(outbam, "wb", fp->header);
-  bam_header_t *bh = fp->header;
-
-  iter = sam_header_parse2(fp->header->text);
-  sam_header_parse2(fp->header->text);
+  // read in the recal table
   rglist = malloc(MAX_RG * sizeof(char*));
-  num_rg = 0;
-  while (iter = sam_header2key_val(iter, "RG", "ID", rg_field, &key, &val)) {
-    rglist[num_rg] = malloc(MAX_FIELD * sizeof(char));
-//    strcpy(rglist[num_rg], key);
-    strcpy(rglist[num_rg], val);
-    num_rg++;
-  }
+  rglist[0] = NULL;
+  recaldata = init_recal(1);
+  num_rg = read_recal(recal_file, rglist, recaldata);
   init_cache(num_rg);
-  recaldata = init_recal(num_rg);
-  read_recal(recal_file, rglist, num_rg, recaldata);
-  b = bam_init1();
-  while ((bytes = samread(fp, b)) > 0) {
-    qlen = b->core.l_qseq;
-    if (qlen + 1 > max_length) {
-      max_length = qlen + 1;
-      kroundup32(max_length);
-      sequence = realloc(sequence, max_length);
+
+  if (access(inbam, F_OK) == 0) {	// we are processing a bam file
+    samfile_t *fp = samopen(inbam, "rb", 0);
+    samfile_t *outfp = samopen(outfile, "wb", fp->header);
+    bam_header_t *bh = fp->header;
+    // set up rg_data so we can map from IDs back to read groups, which then
+    // will get matched in rglist to choose the right recalibration data
+    good_rgfield_index = read_group_check(fp, rglist, num_rg, rg_data, rg_field);
+    if (good_rgfield_index == -1) {
+      return(-1);
+    }
+
+    b = bam_init1();
+    while ((bytes = samread(fp, b)) > 0) {
+      qlen = b->core.l_qseq;
+      if (qlen + 1 > max_length) {
+        max_length = qlen + 1;
+        kroundup32(max_length);
+        sequence = realloc(sequence, max_length);
 //      quality = realloc(quality, max_length);
-    }
-    sequence[qlen] = '\0';
+      }
+      sequence[qlen] = '\0';
 //    quality[qlen] = '\0';
-    rawdata = bam_get_seq(b);
-    uint8_t backup[b->l_data];
-    for(i=0; i < b->l_data; i++) {
-      backup[i] = b->data[i];
-    }
-    int offset = ((b)->core.n_cigar<<2) + (b)->core.l_qname + (((b)->core.l_qseq + 1)>>1);
-    quality = backup + offset;
-    rg = bam_aux_get(b, "RG");
-    rg = rg + 1;
-    if (!rg) {
-      rg = rg_const;
-    }
-    for (i = 0; i < qlen; i++) {
-      sequence[i] = bam_seqi(rawdata, i);
-    }
-    // this is how they access qualities in bam.h
-    q_pointer = b->data + b->core.n_cigar * 4 + b->core.l_qname + ((b->core.l_qseq+1)>>1);
-    for (i = 0; i < qlen; i++) {
-      // get context and cycle
-      if (b->core.flag & 16) {	// mapped to reverse strand
-        current = nt16_table_comp[sequence[i]];
-        if (i < qlen-1) {
-          preceding = nt16_table_comp[sequence[i+1]];
-        } else {
-          preceding = '.';
+      rawdata = bam_get_seq(b);
+      uint8_t backup[b->l_data];
+      for(i=0; i < b->l_data; i++) {
+        backup[i] = b->data[i];
+      }
+      int offset = ((b)->core.n_cigar<<2) + (b)->core.l_qname + (((b)->core.l_qseq + 1)>>1);
+      quality = backup + offset;
+
+      // deal with read groups again
+      rg = bam_aux_get(b, "RG");
+      rgID = malloc(sizeof(char) * strlen(rg));
+      if (rg[0] == 90) {
+        strcpy(rgID, rg + 1);
+      }
+      // rg comes from the bam alignment structure as an ID
+      // the ID is listed in the @RG lines in the sam header
+      // This should then go to one of the RG fields (PU, SM, LB)
+      // Then we can pick up where this is in rglist
+      for (i = 0; i < MAX_RG; i++) {
+        if (rg_data[good_rgfield_index][i]->Value[0] == '\0') {
+          break;
         }
-        cycle = qlen - i;
-      } else {	// mapped to forward strand
-        current = nt16_table[sequence[i]];
+        if (strcmp(rg_data[good_rgfield_index][i]->ID, rgID) == 0) {
+          rg_search = malloc(sizeof(char) * (strlen(rg_data[good_rgfield_index][i]->Value)+1));
+          strcpy(rg_search, rg_data[good_rgfield_index][i]->Value);
+          break;
+        }
+      }
+      if (rg_search == NULL) {
+        fprintf(stderr, "Can't find read group for ID %s; not recalibrating this\n", rgID);
+      } else {
+        rg_index = get_rg_index(rglist, rg_search, false);
+
+        for (i = 0; i < qlen; i++) {
+          sequence[i] = bam_seqi(rawdata, i);
+        }
+        // this is how they access qualities in bam.h
+        q_pointer = b->data + b->core.n_cigar * 4 + b->core.l_qname + ((b->core.l_qseq+1)>>1);
+        for (i = 0; i < qlen; i++) {
+          // get context and cycle
+          if (b->core.flag & 16) {	// mapped to reverse strand
+            current = nt16_table_comp[sequence[i]];
+            if (i < qlen-1) {
+              preceding = nt16_table_comp[sequence[i+1]];
+            } else {
+              preceding = '.';
+            }
+            cycle = qlen - i;
+          } else {	// mapped to forward strand
+            current = nt16_table[sequence[i]];
+            if (i > 0) {
+              preceding = nt16_table[sequence[i-1]];
+            } else {
+              preceding = '.';
+            }
+            cycle = i + 1;
+          }
+          // take care of cycle for first / second read
+          if (b->core.flag & 128) {	// second of a pair
+            cycle = -cycle;
+          }
+          debug && fprintf(stderr, "rgID %s, cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", rgID, cycle, sequence[i], preceding, current, quality[i], newq(quality[i], cycle, preceding, current, recaldata, rg_index));
+          q_pointer[i] = newq(quality[i], cycle, preceding, current, recaldata, rg_index);
+        }
+      }
+      samwrite(outfp, b);
+    }
+    bam_destroy1(b);
+    samclose(outfp);
+    samclose(fp);
+    return(0);
+
+  } else if (access(infastq, F_OK) == 0) {	// processing a fastq file
+
+    gzFile fp;
+    gzFile outp;
+    kseq_t *seq;
+    int l;
+    char *newquality;
+    newquality = malloc(MAX_FIELD * sizeof(char));
+
+    if (read_pairnum != 1 && read_pairnum != 2) {
+      read_pairnum = 1;	// default value if invalid
+    }
+
+    // we will not have read groups by default - take the first in the recal table
+    rg_index = 0;
+
+    // read fastq and recalibrate
+    // we are going to only output gzipped files
+    fp = gzopen(infastq, "r");
+    if (outfile[strlen(outfile)-2] != 'g' || outfile[strlen(outfile)-1] != 'z') {
+      outfile = strcat(outfile, ".gz");
+    }
+    outp = gzopen(outfile, "w");
+    seq = kseq_init(fp);
+    while ((l = kseq_read(seq)) >= 0) {
+      sequence = seq->seq.s;
+      qlen = strlen(sequence);
+      quality = seq->qual.s;
+      if (qlen > strlen(newquality)) {
+        newquality = realloc(newquality, qlen);
+      }
+      strcpy(newquality, quality);
+      for (i = 0; i < qlen; i++) {
+        current = sequence[i];
+        cycle = i+1;
+        if (read_pairnum == 2) { cycle = -cycle; }
         if (i > 0) {
-          preceding = nt16_table[sequence[i-1]];
+          preceding = sequence[i-1];
         } else {
           preceding = '.';
         }
-        cycle = i + 1;
+        debug && fprintf(stderr, "cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", cycle, sequence[i], preceding, current, quality[i] - 33, newq(quality[i] - 33, cycle, preceding, current, recaldata, rg_index));
+        newquality[i] = newq(quality[i] - 33, cycle, preceding, current, recaldata, rg_index) + 33;
       }
-      // take care of cycle for first / second read
-      if (b->core.flag & 128) {	// second of a pair
-        cycle = -cycle;
+      if (seq->comment.s == NULL || strlen(seq->comment.s) < 1) {
+        gzprintf(outp, "@%s\n%s\n+\n%s\n", seq->name.s, sequence, newquality);
+      } else {
+        gzprintf(outp, "@%s %s\n%s\n+\n%s\n", seq->name.s, seq->comment.s, sequence, newquality);
       }
-      debug && fprintf(stderr, "rg %s, cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", rg, cycle, sequence[i], preceding, current, quality[i], newq(quality[i], rg, cycle, preceding, current, recaldata, rglist, num_rg));
-      q_pointer[i] = newq(quality[i], rg, cycle, preceding, current, recaldata, rglist, num_rg);
     }
-    samwrite(outfp, b);
+    kseq_destroy(seq);
+    gzclose(fp);
+    gzclose(outp);
   }
-  bam_destroy1(b);
-  samclose(outfp);
-  samclose(fp);
   return(0);
 }
