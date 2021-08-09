@@ -521,7 +521,7 @@ int main (int argc, char *argv[])
     fprintf(stderr, "  lacepr [ options ] --fastq <in fastq.gz> --recal <recal file> --out <out fastq.gz>\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "  --field PU|LB|SM  for bam input, header field with read group information\n");
-    fprintf(stderr, "                    Default PU.");
+    fprintf(stderr, "                    Default PU.\n");
     fprintf(stderr, "  --rg <string>     for bam/fastq input, force usage of data for this read group\n");
     fprintf(stderr, "                    from the recalibration file.\n");
     fprintf(stderr, "  --pair 1|2        for fastq input, specify R1/R2 read. Default 1.\n");
