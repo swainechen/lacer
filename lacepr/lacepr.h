@@ -8,7 +8,7 @@
 #define CONTEXT_LENGTH 2
 #define MAX_CONTEXT (1 << (CONTEXT_LENGTH * 2))
 
-const char *header_version = "0.1";
+const char *header_version = "0.2";
 
 const double prior[] = {
   -0.0457574905606751,	// 0
@@ -64,6 +64,12 @@ typedef struct {
   point_recal_t OrigQual[MAX_Q + 1];
 } recal_set_t;
 
+typedef struct {
+  // Field will be taken care of outside this type, using KNOWN_RGFIELD
+  char ID[MAX_FIELD];
+  char Value[MAX_FIELD];
+} rg_item_t;
+
 // we'll use an array of these - one for each read group
 // then each line of the recal table will be in another array
 // for example:
@@ -93,6 +99,8 @@ int whitespaceline (const char *s) {
   return 1;
 }
 
-int get_rg_index (char** rglist, int num_rg, char* rg);
+// get_rg_index just takes the rglist array and an rg, if rg doesn't already
+// exist in rglist then it will get inserted and a valid index will be returned
+int get_rg_index (char** rglist, char* rg, bool insert);
 int get_context_index (char *s);
 int get_cycle_index (int c);
