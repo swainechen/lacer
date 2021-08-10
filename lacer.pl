@@ -1,8 +1,14 @@
 #!/usr/bin/perl
 #
 
-my $lacer_version = 0.425;
+my $lacer_version = 0.426;
 
+# version 0.426
+# Update recal file (no_standard_covs false) to track GATK4
+# Add a new verbosity level to prevent SVD fits for covariates by default
+# Cosmetic updates to progress tracker
+# Enable correct progress when stopbases is set
+#
 # version 0.425
 # Replicate rows prior to svd to make sure we have more rows than columns
 # This appears to be a new check in PDL somewhere between 2.007 and 2.018
@@ -219,9 +225,10 @@ Technical SVD/recalibration parameters
   -minor <float>             : between 0 and 1, realistically less than 0.1
                                defines frequency of minor bases in a pileup
                                (default $MINOR_FREQ)
-  -verbose <0|1|2>           : 0 = totally silent
-                               1 = progress meter (default)
-                               2 = noisy (memory usage, timing, etc on STDOUT)
+  -verbose <0|1|2|3>         : 0 = totally silent
+                               1 = progress meter, overall SVD fit (default)
+                               2 = progress meter with all SVD fits
+                               3 = noisy (memory usage, timing, etc on STDOUT)
   -dump|nodump               : dump all the data to STDOUT (warning it's a lot)
 __USAGE__
   exit;
@@ -231,7 +238,7 @@ __USAGE__
 if (!length($outfile) || $outfile eq "-") {
   *OUT = *STDOUT;
 } elsif (-f $outfile) {
-  die "Output file $outfile exists, will not overwrite.  Aborting...\n";
+  die "Output file $outfile exists, will not overwrite. Aborting...\n";
 } else {
   open(OUT, ">$outfile");
 }
@@ -294,8 +301,8 @@ my $max_bases;
 my $rginfo;
 my $left_fields;
 
-$verbose = 2 if $verbose > 2;
-if ($verbose == 2) {
+$verbose = 3 if $verbose > 3;
+if ($verbose == 3) {
   print STDOUT "# Start time: $starttime\n";
   print STDOUT "# Original command line: ", $original_command, "\n";
   print STDOUT "# windowsize (for pileups): $windowsize\n";
@@ -695,14 +702,20 @@ if ($thread_debug) { print STDERR "Return from pileup for $region, thread $threa
 $waiting = 1;
 $wait_interval = 60;
 if ($verbose) {
-  $progress = Term::ProgressBar->new({ name => "Pileups", count => $number_regions, remove => 0, ETA => 'linear' });
+  if ($stop_bases > 0) {
+    $progress = Term::ProgressBar->new({ name => "Cal bases", count => $stop_bases, remove => 0, ETA => 'linear' });
+  } else {
+    $progress = Term::ProgressBar->new({ name => "Pileups", count => $number_regions, remove => 0, ETA => 'linear' });
+  }
   $progress->max_update_rate($wait_interval);
   $progress->minor(0);
   $progress->message("Lacer version $lacer_version running on $bamfile");
   if ($stop_bases > 0) {
-    $progress->message("Will stop after finding at least $stop_bases calibration bases. Progress bar won't mean anything...");
+    $progress->message("Will stop after finding at least $stop_bases calibration bases.");
   }
-  $progress->message("For all read groups: 0/0 (calibration/total; 0.00%) bases processed");
+  $progress->message("Press Control-C *once* to finish current windows and recalibrate immediately.");
+  $progress->message("Numbers below for all read groups (expect calibration bases to be <2% total)");
+  $progress->message("0/0 (calibration/total; 0.00%) bases processed");
 }
 if ($DUMP) {
   print STDOUT join ("\t", "# SeqID", "Position", "Base", "MapQ", "Strand", "Quality", "Consensus", "Vote", "Coverage", "Cycle", "ContextCode"), "\n";
@@ -739,7 +752,15 @@ while ($waiting) {
   if ($verbose) {
     $pending = $queue->pending();
     if (defined($pending)) {
-      $progress->update($number_regions - $pending - $num_threads);
+      if ($stop_bases > 0) {
+        if ($CALIBRATION_BASES > $stop_bases) {
+          $progress->update($stop_bases);
+        } else {
+          $progress->update($CALIBRATION_BASES);
+        }
+      } else {
+        $progress->update($number_regions - $pending - $num_threads);
+      }
     }
     if ($TOTAL_BASES > 0) {
       $message = "\b\rFor all read groups: $CALIBRATION_BASES/" . $TOTAL_BASES . " (calibration/total; " . sprintf("%.2f", $CALIBRATION_BASES/$TOTAL_BASES * 100) . "%) bases processed";
@@ -772,7 +793,15 @@ if (!defined $ALLHIST || ref($ALLHIST) ne "HASH") {
   exit;
 }
 if ($verbose) {
-  $progress->update($number_regions);
+  if ($stop_bases > 0) {
+    if ($CALIBRATION_BASES > $stop_bases) {
+      $progress->update($stop_bases);
+    } else {
+      $progress->update($CALIBRATION_BASES);
+    }
+  } else {
+    $progress->update($number_regions);
+  }
   print STDERR "\nBeginning SVD-based recalibration...\n";
 }
 
@@ -826,7 +855,7 @@ foreach $rg (keys %$alldata) {
 # $svd_hist->{$rg} = long(@{$ALLHIST->{$rg}->{0}}[$MINQUAL..$MAXQUAL]);
 # getting some odd type problem converting to pdl - so make the whole array int?
   $svd_hist->{$rg} = pdl(to_int(@{$ALLHIST->{$rg}->{0}}[$MINQUAL..$MAXQUAL]));
-  if ($verbose == 2) {
+  if ($verbose == 3) {
     $mu->record("After generating matrix");
     print STDOUT "# Initial base data size for read group $rg: ", $alldata->{$rg}->shape, "\n";
   }
@@ -850,7 +879,7 @@ foreach $rg (keys %$alldata) {
         }
         $covariate_hist->{$rg}->{$code_context{$covariate}} = pdl(to_int(@{$ALLHIST->{$rg}->{$code_context{$covariate}}}[$MINQUAL..$MAXQUAL]));
         ($covariate_recalibrated->{$rg}->{$code_context{$covariate}}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$code_context{$covariate}}, $covariate_binsize, $last_count, $min_span);
-        if ($verbose) {
+        if ($verbose >= 2) {
           print STDOUT "# SVD fit $code_context{$covariate} ($covariate): $pca1\n";
         }
       }
@@ -867,7 +896,7 @@ foreach $rg (keys %$alldata) {
         }
         $covariate_hist->{$rg}->{$covariate} = pdl(to_int(@{$ALLHIST->{$rg}->{$covariate}}[$MINQUAL..$MAXQUAL]));
         ($covariate_recalibrated->{$rg}->{$covariate}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$covariate}, $covariate_binsize, $last_count, $min_span);
-        if ($verbose) {
+        if ($verbose >= 2) {
           print STDOUT "# SVD fit (Position $covariate): $pca1\n";
         }
       }
@@ -889,7 +918,7 @@ foreach $rg (keys %$alldata) {
       ref($svd_hist->{$rg}) eq "PDL") {
     push @table, $rg;
     $max_bases = sum($svd_hist->{$rg}) if sum($svd_hist->{$rg}) > $max_bases;
-    if ($verbose == 2) {
+    if ($verbose == 3) {
       print STDERR "Read group $rg recalibrated on ", $alldata->{$rg}->getdim(1), " nonconsensus and matched consensus bases out of ", sum($svd_hist->{$rg}), " total bases.\n";
     }
   } else {
@@ -984,7 +1013,7 @@ if ($gatk) {
 
 }
 
-if ($verbose == 2) {
+if ($verbose == 3) {
   $mu->record("Finished");
   @table = split /\n/, $mu->report();
   foreach $i (0..$#table) {
@@ -1281,7 +1310,7 @@ low_quality_tail            2
 maximum_cycle_value         500                                                                     
 mismatches_context_size     2                                                                       
 mismatches_default_quality  -1                                                                      
-no_standard_covs            true                                                                    
+no_standard_covs            false                                                                   
 quantizing_levels           16                                                                      
 recalibration_report        null                                                                    
 run_without_dbsnp           false                                                                   
@@ -1477,7 +1506,7 @@ sub to_int {
 
 sub sigint_handler {
   if (!$ABORT) {
-    print STDERR "\nCaught Control-C.  Finishing current pileup windows and recalibrating.\nPress Control-C again to abort immediately.\n\n";
+    print STDERR "\nCaught Control-C. Finishing current pileup windows and recalibrating.\nPress Control-C again to abort immediately.\n\n";
     &quit_pileups;
     $ABORT = 1;
   } else {
