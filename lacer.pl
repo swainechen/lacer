@@ -763,7 +763,7 @@ while ($waiting) {
       }
     }
     if ($TOTAL_BASES > 0) {
-      $message = "\b\rFor all read groups: $CALIBRATION_BASES/" . $TOTAL_BASES . " (calibration/total; " . sprintf("%.2f", $CALIBRATION_BASES/$TOTAL_BASES * 100) . "%) bases processed";
+      $message = "\b\r$CALIBRATION_BASES/" . $TOTAL_BASES . " (calibration/total; " . sprintf("%.2f", $CALIBRATION_BASES/$TOTAL_BASES * 100) . "%) bases processed";
       $ml = length($message) - $ml - 1;
       $progress->message($message);
     }
