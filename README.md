@@ -98,6 +98,6 @@ This warning can be safely ignored.
 
 Contact/citation/information
 -------------------
-slchen@gis.a-star.edu.sg, swainechen@gmail.com
-Preprint: https://doi.org/10.1101/130732
+slchen@gis.a-star.edu.sg, swainechen@gmail.com<br/>
+Preprint: https://doi.org/10.1101/130732<br/>
 Citation: Chung JC and Chen SL. 2017. "Lacer: Accurate Base Quality Score Recalibration For Improving Variant Calling From Next-Generation Sequencing Data In Any Organism." bioRxiv doi: https://doi.org/10.1101/130732
