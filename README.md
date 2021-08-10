@@ -1,13 +1,13 @@
 # lacer
 Lacer: Accurate Base Quality Score Recalibration using Linear Algebra  
-Version: 0.424
+Version: 0.426
 
 Lacepr: A fast replacement to rewrite recalibrated base quality scores in bam files  
-Version: 0.1
+Version: 0.2
 
 Lacer takes a BAM file and produces a recalibration file similar to GATK's BaseRecalibrator. The algorithm is distinct from GATK's, however, and is usable on non-human data without requirement to already have a set of known variants. The resulting recalibration file can be used in GATK's PrintReads to perform a recalibration.
 
-Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as that used in GATK. It's much (~3x) faster but does less error checking.
+Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as that used in GATK. It's much (~2-3x) faster but does less error checking. It's also a bit forgiving with ReadGroup issues.
 
 Installation / Requirements
 ---------------------------
@@ -73,7 +73,7 @@ java -Xmx2g -jar GenomeAnalysisTK.jar \
 
 Alternatively, the provided lacepr command can be used:
 ```
-./lacepr input.bam recal.txt recal.bam
+./lacepr --bam input.bam --recal recal.txt --out recal.bam
 ```
 
 Note: The format of the recalibration table required by GATK has changed frequently in recent versions.  Depending on the version of GATK you are using, you may need to specify additional parameters to Lacer to produce the appropriate format file.
@@ -87,7 +87,7 @@ For GATK version 2.8 or later:
 ./lacer.pl -bam input.bam -reference reference.fasta -rgfield PU -outfile recal.txt
 ```
 
-If you are using lacepr to print out recalibrated reads, simply use the defaults for lacer.
+If you are using `lacepr` to print out recalibrated reads, simply use the defaults for Lacer. There are also options for forcing the use of read groups if needed.
 
 Known Issues
 ------------
