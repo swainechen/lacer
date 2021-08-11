@@ -7,7 +7,7 @@ Version: 0.2
 
 Lacer takes a BAM file and produces a recalibration file similar to GATK's BaseRecalibrator. The algorithm is distinct from GATK's, however, and is usable on non-human data without requirement to already have a set of known variants. The resulting recalibration file can be used in GATK's PrintReads to perform a recalibration.
 
-Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as that used in GATK. It's much (~2-3x) faster but does less error checking. It's also a bit forgiving with ReadGroup issues.
+Lacepr takes a BAM file and recalibration file and produces a new BAM file with recalibrated quality scores. The algorithm is the same as that used in GATK. It's faster (~2-3x) and a bit more forgiving with ReadGroup issues.
 
 Installation / Requirements
 ---------------------------
