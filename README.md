@@ -27,7 +27,7 @@ It depends on the following Perl modules available in a standard Perl installati
 - Thread::Queue
 - threads
 - threads::shared
--
+
 To check the availability of these modules, you can run:
 ```
 perl -e 'use Bio::DB::Sam'
@@ -91,10 +91,11 @@ If you are using `lacepr` to print out recalibrated reads, simply use the defaul
 
 Known Issues
 ------------
-When running Lacer, the following warning will appear:
+If you are using PDL::Parallel::threads < 0.04, you may run into a compile error; a fix can be found [here] (https://github.com/run4flat/PDL-Parallel-threads/issues/1)
+Also, these earlier versions of PDL::Parallel::threads will issue the following warning, which can be safely ignored:
 Subroutine PDL::CLONE_SKIP redefined at /mnt/software/lib/perl5/5.10.1/PDL/Parallel/threads.pm line 39.
 
-This warning can be safely ignored.
+Version 0.04 of PDL::Parallel::threads fixes both of these issues (Feb 2022).
 
 Contact/citation/information
 -------------------
