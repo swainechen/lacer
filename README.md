@@ -91,7 +91,7 @@ If you are using `lacepr` to print out recalibrated reads, simply use the defaul
 
 Known Issues
 ------------
-If you are using PDL::Parallel::threads < 0.04, you may run into a compile error; a fix can be found [here] (https://github.com/run4flat/PDL-Parallel-threads/issues/1)
+If you are using PDL::Parallel::threads < 0.04, you may run into a compile error; a fix can be found at https://github.com/run4flat/PDL-Parallel-threads/issues/1
 Also, these earlier versions of PDL::Parallel::threads will issue the following warning, which can be safely ignored:
 Subroutine PDL::CLONE_SKIP redefined at /mnt/software/lib/perl5/5.10.1/PDL/Parallel/threads.pm line 39.
 
