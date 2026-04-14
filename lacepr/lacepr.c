@@ -161,7 +161,10 @@ int get_rg_index (char** rglist, char* rg, bool insert) {
   if (rglist[0] == NULL) {
     if (insert) {
       rglist[0] = malloc(MAX_FIELD * sizeof(char));
-      strcpy(rglist[0], rg);
+      if (rglist[0]) {
+        strncpy(rglist[0], rg, MAX_FIELD - 1);
+        rglist[0][MAX_FIELD - 1] = '\0';
+      }
       rglist[1] = NULL;
       return(0);
     } else {
@@ -172,7 +175,10 @@ int get_rg_index (char** rglist, char* rg, bool insert) {
       if (rglist[i] == NULL) {
         if (insert) {
           rglist[i] = malloc(MAX_FIELD * sizeof(char));
-          strcpy(rglist[i], rg);
+          if (rglist[i]) {
+            strncpy(rglist[i], rg, MAX_FIELD - 1);
+            rglist[i][MAX_FIELD - 1] = '\0';
+          }
 	  if (i+1 < MAX_RG) { rglist[i+1] = NULL; }
 	  return(i);
         } else {
@@ -306,7 +312,8 @@ int read_recal (char* file, char** rglist, recal_t *data) {
               // 5 - Errors
               bytes = getline(&in, &n, r);
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
-                parsed = sscanf(in, "%s %s %lf %lf %d %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
+                // Limit input lengths to prevent buffer overflows
+                parsed = sscanf(in, "%255s %3s %lf %lf %d %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
                 if (parsed == 6) {
                   rgindex = get_rg_index(rglist, rg, true);
                   temp_table0[rgindex].Quality = lround(empqual);
@@ -346,7 +353,8 @@ int read_recal (char* file, char** rglist, recal_t *data) {
               // 5 - Errors
               bytes = getline(&in, &n, r);
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
-                parsed = sscanf(in, "%s %d %s %lf %d %lf", rg, &qual, eventtype, &empqual, &obs, &err);
+                // Limit input lengths to prevent buffer overflows
+                parsed = sscanf(in, "%255s %d %3s %lf %d %lf", rg, &qual, eventtype, &empqual, &obs, &err);
                 if (parsed == 6 && strcmp(eventtype,"M") == 0) {
                   rgindex = get_rg_index(rglist, rg, false);
                   data[rgindex].OrigQual[qual].Quality = lround(empqual);
@@ -369,7 +377,8 @@ int read_recal (char* file, char** rglist, recal_t *data) {
               // 7 - Errors
               bytes = getline(&in, &n, r);
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
-                parsed = sscanf(in, "%s %d %s %s %s %lf %d %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
+                // Limit input lengths to prevent buffer overflows
+                parsed = sscanf(in, "%255s %d %255s %255s %3s %lf %d %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
                 if (parsed == 8 && strcmp(eventtype,"M") == 0) {
                   rgindex = get_rg_index(rglist, rg, false);
                   if (strcmp(covname, "Cycle") == 0) {
@@ -419,9 +428,12 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     iter = sam_header_parse2(fp->header->text);
     j = 0;
     while (iter = sam_header2key_val(iter, "RG", "ID", KNOWN_RGFIELD[i], &key, &val)) {
-      rg_data[i][j] = malloc(MAX_FIELD * sizeof(rg_item_t));
-      strcpy(rg_data[i][j]->ID, key);
-      strcpy(rg_data[i][j]->Value, val);
+      rg_data[i][j] = malloc(sizeof(rg_item_t));
+      if (!rg_data[i][j]) continue;
+      strncpy(rg_data[i][j]->ID, key, MAX_FIELD - 1);
+      rg_data[i][j]->ID[MAX_FIELD - 1] = '\0';
+      strncpy(rg_data[i][j]->Value, val, MAX_FIELD - 1);
+      rg_data[i][j]->Value[MAX_FIELD - 1] = '\0';
       j++;
       if (j >= MAX_RG) { break; }
     }
@@ -619,29 +631,28 @@ int main (int argc, char *argv[])
       quality = backup + offset;
 
       // deal with read groups again
+      rg_search = NULL;
+      rgID = NULL;
       if (force_rg_index == -1) {
         rg = bam_aux_get(b, "RG");
-        rgID = malloc(sizeof(char) * strlen(rg));
-        if (rg[0] == 90) {
-          strcpy(rgID, rg + 1);
+        if (rg && rg[0] == 'Z') {
+          rgID = (char*)(rg + 1);
         }
-        // rg comes from the bam alignment structure as an ID
-        // the ID is listed in the @RG lines in the sam header
-        // This should then go to one of the RG fields (PU, SM, LB)
-        // Then we can pick up where this is in rglist
-        for (i = 0; i < MAX_RG; i++) {
-          if (rg_data[good_rgfield_index][i]->Value[0] == '\0') {
-            break;
-          }
-          if (strcmp(rg_data[good_rgfield_index][i]->ID, rgID) == 0) {
-            rg_search = malloc(sizeof(char) * (strlen(rg_data[good_rgfield_index][i]->Value)+1));
-            strcpy(rg_search, rg_data[good_rgfield_index][i]->Value);
-            break;
+
+        if (rgID) {
+          for (i = 0; i < MAX_RG; i++) {
+            if (rg_data[good_rgfield_index][i]->Value[0] == '\0') {
+              break;
+            }
+            if (strcmp(rg_data[good_rgfield_index][i]->ID, rgID) == 0) {
+              rg_search = rg_data[good_rgfield_index][i]->Value;
+              break;
+            }
           }
         }
 
         if (rg_search == NULL) {
-          fprintf(stderr, "Can't find read group for ID %s; not recalibrating this\n", rgID);
+          fprintf(stderr, "Can't find read group for ID %s; not recalibrating this\n", rgID ? rgID : "NULL");
         } else {
           rg_index = get_rg_index(rglist, rg_search, false);
         }
@@ -696,7 +707,8 @@ int main (int argc, char *argv[])
     kseq_t *seq;
     int l;
     char *newquality;
-    newquality = malloc(MAX_FIELD * sizeof(char));
+    size_t newquality_size = MAX_FIELD;
+    newquality = malloc(newquality_size);
 
     if (read_pairnum != 1 && read_pairnum != 2) {
       read_pairnum = 1;	// default value if invalid
@@ -712,8 +724,16 @@ int main (int argc, char *argv[])
     // read fastq and recalibrate
     // we are going to only output gzipped files
     fp = gzopen(infastq, "r");
-    if (outfile[strlen(outfile)-2] != 'g' || outfile[strlen(outfile)-1] != 'z') {
-      outfile = strcat(outfile, ".gz");
+    size_t outlen = strlen(outfile);
+    if (outlen < 3 || strcmp(outfile + outlen - 3, ".gz") != 0) {
+      char *new_outfile = malloc(outlen + 4);
+      if (new_outfile == NULL) {
+        fprintf(stderr, "Memory allocation failed for outfile name\n");
+        return(1);
+      }
+      strcpy(new_outfile, outfile);
+      strcat(new_outfile, ".gz");
+      outfile = new_outfile;
     }
     outp = gzopen(outfile, "w");
     seq = kseq_init(fp);
@@ -721,10 +741,13 @@ int main (int argc, char *argv[])
       sequence = seq->seq.s;
       qlen = strlen(sequence);
       quality = seq->qual.s;
-      if (qlen > strlen(newquality)) {
-        newquality = realloc(newquality, qlen);
+      if (qlen + 1 > newquality_size) {
+        newquality_size = qlen + 1;
+        newquality = realloc(newquality, newquality_size);
       }
-      strcpy(newquality, quality);
+      if (newquality) {
+        strcpy(newquality, quality);
+      }
       for (i = 0; i < qlen; i++) {
         current = sequence[i];
         cycle = i+1;
