@@ -117,6 +117,7 @@ my $ref_fasta = "";
 my $windowsize = 10000;	# windows size of coordinates to look at
 my $region = "";	# look only in this region
 my $outfile = "-";
+my $out_fh;
 my $vcf = "";
 my $vcfoffset = 1000;
 my $svd_bin = 3000;
@@ -236,11 +237,11 @@ __USAGE__
 
 # set up variables and files and such
 if (!length($outfile) || $outfile eq "-") {
-  *OUT = *STDOUT;
+  $out_fh = \*STDOUT;
 } elsif (-f $outfile) {
   die "Output file $outfile exists, will not overwrite. Aborting...\n";
 } else {
-  open(OUT, ">$outfile");
+  open($out_fh, '>', $outfile) or die "Cannot open $outfile for writing: $!";
 }
 my $sam = Bio::DB::Sam->new(-fasta => $ref_fasta, -bam => $bamfile, -autoindex => 1, -expand_flags => 1);
 my $bam = $sam->bam;
@@ -316,8 +317,8 @@ if ($verbose == 3) {
 # figure out what regions we're looking at
 #
 if (length $region && -f $region) {
-  open REG, $region;
-  while ($j = <REG>) {
+  open(my $reg_fh, '<', $region) or die "Cannot open region file $region: $!";
+  while ($j = <$reg_fh>) {
     next if $j =~ /^#/;
     next if $j =~ /^$/;
     chomp;
@@ -413,8 +414,8 @@ foreach $rg (@RG_LIST) {
 # generate pileups and collect info
 #
 if (-f $vcf) {
-  open V, $vcf;
-  while (<V>) {
+  open(my $v_fh, '<', $vcf) or die "Cannot open VCF file $vcf: $!";
+  while (<$v_fh>) {
     next if /^#/;
     chomp;
     @f = split /\t/, $_;
@@ -424,7 +425,7 @@ if (-f $vcf) {
     }
     $VCFPOS->{$f[0]}->{$f[1]} = 1;
   }
-  close V;
+  close $v_fh;
 }
 
 $queue = Thread::Queue->new;
@@ -875,7 +876,7 @@ foreach $rg (keys %$alldata) {
       ($matrix, $last_count) = make_matrix($alldata->{$rg}->(:,$ix), $covariate_binsize);
       if (!$matrix->isnull) {
         if (!$gatk) {
-          print OUT "# Covariate: $code_context{$covariate} ($covariate)\n";
+          print $out_fh "# Covariate: $code_context{$covariate} ($covariate)\n";
         }
         $covariate_hist->{$rg}->{$code_context{$covariate}} = pdl(to_int(@{$ALLHIST->{$rg}->{$code_context{$covariate}}}[$MINQUAL..$MAXQUAL]));
         ($covariate_recalibrated->{$rg}->{$code_context{$covariate}}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$code_context{$covariate}}, $covariate_binsize, $last_count, $min_span);
@@ -892,7 +893,7 @@ foreach $rg (keys %$alldata) {
       ($matrix, $last_count) = make_matrix($alldata->{$rg}->(:,$ix), $covariate_binsize);
       if (!$matrix->isnull) {
         if (!$gatk) {
-          print OUT "# Covariate: $covariate\n";
+          print $out_fh "# Covariate: $covariate\n";
         }
         $covariate_hist->{$rg}->{$covariate} = pdl(to_int(@{$ALLHIST->{$rg}->{$covariate}}[$MINQUAL..$MAXQUAL]));
         ($covariate_recalibrated->{$rg}->{$covariate}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$covariate}, $covariate_binsize, $last_count, $min_span);
@@ -959,10 +960,10 @@ if ($gatk) {
                    5 => 0 };	# Errors
   &clean_gatk_table($left_fields, \@table);
   # subtract 1 from number of lines in table - we added the header
-  print OUT '#:GATKTable:6:' . (scalar(@table)-1) . ':%s:%s:%.4f:%.4f:%d:%.2f:;', "\n";
-  print OUT '#:GATKTable:RecalTable0:', "\n";
-  print OUT @table;
-  print OUT "\n";
+  print $out_fh '#:GATKTable:6:' . (scalar(@table)-1) . ':%s:%s:%.4f:%.4f:%d:%.2f:;', "\n";
+  print $out_fh '#:GATKTable:RecalTable0:', "\n";
+  print $out_fh @table;
+  print $out_fh "\n";
 
   @table = ("ReadGroup    QualityScore  EventType  EmpiricalQuality  Observations  Errors   \n");
   foreach $rg (keys %$recalibrated) {
@@ -979,10 +980,10 @@ if ($gatk) {
                    5 => 0 };	# Errors
   &clean_gatk_table($left_fields, \@table);
   # subtract 1 from number of lines in table - we added the header
-  print OUT '#:GATKTable:6:' . (scalar(@table)-1) . ':%s:%s:%s:%.4f:%d:%.2f:;', "\n";
-  print OUT '#:GATKTable:RecalTable1:', "\n";
-  print OUT @table;
-  print OUT "\n";
+  print $out_fh '#:GATKTable:6:' . (scalar(@table)-1) . ':%s:%s:%s:%.4f:%d:%.2f:;', "\n";
+  print $out_fh '#:GATKTable:RecalTable1:', "\n";
+  print $out_fh @table;
+  print $out_fh "\n";
 
   @table = ("ReadGroup    QualityScore  CovariateValue  CovariateName  EventType  EmpiricalQuality  Observations  Errors  \n");
   foreach $rg (keys %$covariate_recalibrated) {
@@ -1006,10 +1007,10 @@ if ($gatk) {
                    7 => 0 };	# Errors
   &clean_gatk_table($left_fields, \@table);
   # subtract 1 from number of lines in table - we added the header
-  print OUT '#:GATKTable:8:' . (scalar(@table)-1) . ':%s:%s:%s:%s:%s:%.4f:%d:%.2f:;', "\n";
-  print OUT '#:GATKTable:RecalTable2:', "\n";
-  print OUT @table;
-  print OUT "\n";
+  print $out_fh '#:GATKTable:8:' . (scalar(@table)-1) . ':%s:%s:%s:%s:%s:%.4f:%d:%.2f:;', "\n";
+  print $out_fh '#:GATKTable:RecalTable2:', "\n";
+  print $out_fh @table;
+  print $out_fh "\n";
 
 }
 
@@ -1022,7 +1023,7 @@ if ($verbose == 3) {
   print STDOUT "# Total run time ", (time() - $starttime), " seconds.\n";
 }
 
-close OUT;
+close $out_fh;
 
 sub get_context {
   my ($sequence, $position, $strand) = @_;
@@ -1277,14 +1278,14 @@ sub quality_svd {
   # the recalibration
   $recalibrated = -10 * log10($total_error/$total_bases * $error / $overall_q);
   if (!$gatk) {
-    print OUT "# Initial matrix size ", $matrix->shape, "\n";
-    print OUT "# Bin size: $bin_size\n";
-    print OUT "# SVD fit: ", $s->at(0) * $s->at(0) / inner($s, $s), "\n";
-    print OUT "# Tolerance: $tolerance\n";
-    print OUT "# Stdev: $sdev\n";
-    print OUT "# Candidates: $candidates\n";
-    print OUT "# U1 range: ", (max($u->(0,)) - min($u->(0,))), "\n";
-    print OUT join ("\t", "# Original", "Recalibrated", "Histogram", "Correct", "Error"), "\n";
+    print $out_fh "# Initial matrix size ", $matrix->shape, "\n";
+    print $out_fh "# Bin size: $bin_size\n";
+    print $out_fh "# SVD fit: ", $s->at(0) * $s->at(0) / inner($s, $s), "\n";
+    print $out_fh "# Tolerance: $tolerance\n";
+    print $out_fh "# Stdev: $sdev\n";
+    print $out_fh "# Candidates: $candidates\n";
+    print $out_fh "# U1 range: ", (max($u->(0,)) - min($u->(0,))), "\n";
+    print $out_fh join ("\t", "# Original", "Recalibrated", "Histogram", "Correct", "Error"), "\n";
     wcols(pdl($MINQUAL..$MAXQUAL), $recalibrated, $hist, $correct, $error, { COLSEP => "\t" });
   }
   
@@ -1295,7 +1296,7 @@ sub gatk_header {
   my ($hist, $MAXQUAL, $do_covariates, $max_length) = @_;
   # just dummy stuff
   if ($do_covariates) {
-    print OUT '#:GATKReport.v1.1:5
+    print $out_fh '#:GATKReport.v1.1:5
 #:GATKTable:2:17:%s:%s:;
 #:GATKTable:Arguments:Recalibration argument collection values used in this run
 Argument                    Value                                                                   
@@ -1321,7 +1322,7 @@ solid_recal_mode            SET_Q_ZERO
 #:GATKTable:Quantized:Quality quantization map
 ';
   } else {
-    print OUT '#:GATKReport.v1.1:5
+    print $out_fh '#:GATKReport.v1.1:5
 #:GATKTable:2:17:%s:%s:;
 #:GATKTable:Arguments:Recalibration argument collection values used in this run
 Argument                    Value                                   
@@ -1355,17 +1356,17 @@ solid_recal_mode            SET_Q_ZERO
   }
   my $width = 11;
   $width = $max_bases + 2 if $max_bases + 2 > $width;
-  print OUT "QualityScore  Count" . (" " x ($width-7)) . "  QuantizedScore\n";
+  print $out_fh "QualityScore  Count" . (" " x ($width-7)) . "  QuantizedScore\n";
   foreach my $i (0..93) {
     if ($i < $MAXQUAL) {
-      printf OUT ("% 12d% *d% 16d\n", $i, $width, 0, 8);
+      printf $out_fh ("% 12d% *d% 16d\n", $i, $width, 0, 8);
     } elsif ($i > $MAXQUAL) {
-      printf OUT ("% 12d% *d% 16d\n", $i, $width, 0, $MAXQUAL);
+      printf $out_fh ("% 12d% *d% 16d\n", $i, $width, 0, $MAXQUAL);
     } else {
-      printf OUT ("% 12d% *d% 16d\n", $i, $width, $sum, $MAXQUAL);
+      printf $out_fh ("% 12d% *d% 16d\n", $i, $width, $sum, $MAXQUAL);
     }
   }
-  print OUT "\n";
+  print $out_fh "\n";
 }
 
 sub gatk_table0 {
