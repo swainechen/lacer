@@ -55,6 +55,7 @@ long choose (int n, int k) {
     n--;
     j++;
   }
+  return result;
 }
 
 double log10binomial (double kd, int n, double p) {
@@ -271,7 +272,8 @@ recal_t* init_recal (int num_rg) {
   return data;
 }
 
-int read_recal (char* file, char** rglist, recal_t *data) {
+int read_recal (char* file, char** rglist, recal_t **data_ptr) {
+  recal_t *data = *data_ptr;
   char *in = 0;
   size_t n = 0;
   int num_rg = 0;
@@ -293,7 +295,16 @@ int read_recal (char* file, char** rglist, recal_t *data) {
   point_recal_t *temp_table0;
 
   FILE *r = fopen(file, "r");
+  if (!r) {
+    fprintf(stderr, "Cannot open recal file %s\n", file);
+    return 0;
+  }
   temp_table0 = malloc(MAX_RG * sizeof(point_recal_t));
+  if (!temp_table0) {
+    fprintf(stderr, "Memory allocation failed for temp_table0\n");
+    fclose(r);
+    return 0;
+  }
 
   while ( (bytes = getline(&in, &n, r)) != -1 ) {
     if (bytes > 0) {
@@ -335,13 +346,24 @@ int read_recal (char* file, char** rglist, recal_t *data) {
               }
 	      if (num_rg == 0) {
                 fprintf(stderr, "Couldn't find any read groups in the recal file\n");
+                free(temp_table0);
+                free(in);
+                fclose(r);
 		return(0);
               }
               data = realloc(data, sizeof(recal_t) * num_rg);
+              if (!data) {
+                fprintf(stderr, "Memory allocation failed for recal data\n");
+                free(temp_table0);
+                free(in);
+                fclose(r);
+                return 0;
+              }
+              *data_ptr = data;
 	      for (i = 0; i < num_rg; i++) {
-                data[rgindex].Quality = temp_table0[rgindex].Quality;
-                data[rgindex].Observations = temp_table0[rgindex].Observations;
-                data[rgindex].Errors = temp_table0[rgindex].Errors;
+                data[i].Quality = temp_table0[i].Quality;
+                data[i].Observations = temp_table0[i].Observations;
+                data[i].Errors = temp_table0[i].Errors;
               }
             } else if (strcmp(tkn, "RecalTable1") == 0) {
               // RecalTable1 should be:
@@ -408,6 +430,9 @@ int read_recal (char* file, char** rglist, recal_t *data) {
       }
     }
   }
+  free(temp_table0);
+  free(in);
+  fclose(r);
   return(num_rg);
 }
 
@@ -491,10 +516,10 @@ int main (int argc, char *argv[])
 
   // handle command line and options, print help if needed
   int getopt_c;
-  char *inbam;
-  char *infastq;
-  char *outfile;
-  char *recal_file;
+  char *inbam = NULL;
+  char *infastq = NULL;
+  char *outfile = NULL;
+  char *recal_file = NULL;
   char *use_rg = NULL;
   char *rg_field = "PU";
   int read_pairnum = 1;
@@ -525,7 +550,8 @@ int main (int argc, char *argv[])
   }
   if(strlen(rg_field) > 2) { rg_field[2] = '\0'; }
 
-  if ( ( access(inbam, F_OK) != 0 && access(infastq, F_OK) != 0 ) ||
+  if ( !recal_file || !outfile || ( !inbam && !infastq ) ||
+       ( (inbam ? access(inbam, F_OK) : -1) != 0 && (infastq ? access(infastq, F_OK) : -1) != 0 ) ||
        access(recal_file, F_OK) != 0 ) {
     fprintf(stderr, "Lacepr version %s; headers %s\n", version, header_version);
     fprintf(stderr, "Usage:\n");
@@ -589,7 +615,7 @@ int main (int argc, char *argv[])
   rglist = malloc(MAX_RG * sizeof(char*));
   rglist[0] = NULL;
   recaldata = init_recal(1);
-  num_rg = read_recal(recal_file, rglist, recaldata);
+  num_rg = read_recal(recal_file, rglist, &recaldata);
   if (use_rg != NULL) {
     force_rg_index = get_rg_index(rglist, use_rg, false);
     if (force_rg_index == -1) {
