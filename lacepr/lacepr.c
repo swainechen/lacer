@@ -27,10 +27,14 @@ cache_t *cache;
 void init_cache (int n) {
   int i, j, k, l;
   cache = realloc(cache, n * sizeof(cache_t));
+  if (!cache && n > 0) {
+    fprintf(stderr, "Memory allocation failed for cache\n");
+    return;
+  }
   for (i=0; i < n; i++) {
-    for (j=0; j < MAX_REASONABLE_Q+1; j++) {
+    for (j=0; j < MAX_Q+1; j++) {
       for (k=0; k < MAX_CONTEXT+1; k++) {
-        for (l=0; l < MAX_CYCLE+1; l++) {
+        for (l=0; l < MAX_CYCLE_BINS; l++) {
           cache[i][j][k][l] = 0;
         }
       }
@@ -106,7 +110,7 @@ int delta (int origq, int obs, double err) {
   }
 }
 
-int newq (int8_t origq, int cycle, char preceding, char current, recal_t *recaldata, int recaldata_index) {
+int newq (uint8_t origq, int cycle, char preceding, char current, recal_t *recaldata, int recaldata_index) {
   int nq = 40;
   int running_q;
   int adjust_q = 0;
@@ -120,6 +124,14 @@ int newq (int8_t origq, int cycle, char preceding, char current, recal_t *recald
   context[2] = '\0';
   int con_i = get_context_index(context);
   int cyc_i = get_cycle_index(cycle);
+
+  if (origq > MAX_Q || recaldata_index < 0 || con_i < 0 || con_i > MAX_CONTEXT || cyc_i < 0 || cyc_i >= MAX_CYCLE_BINS) {
+    return origq;
+  }
+
+  if (cache == NULL) {
+    return origq;
+  }
 
   if (cache[recaldata_index][origq][con_i][cyc_i] > 0) {
     return cache[recaldata_index][origq][con_i][cyc_i];
@@ -233,9 +245,9 @@ int get_context_index (char *s) {
 // encode negatives as even numbers
 // 0 is bad data
 int get_cycle_index (int i) {
-  if (i > 0 && i < MAX_CYCLE) {
+  if (i > 0 && i <= MAX_CYCLE) {
     return (i*2-1);
-  } else if (i < 0 && -i < MAX_CYCLE) {
+  } else if (i < 0 && -i <= MAX_CYCLE) {
     return (-i*2);
   }
   return 0;	// bad data
@@ -245,6 +257,10 @@ int get_cycle_index (int i) {
 recal_t* init_recal (int num_rg) {
   int i, j, k;
   recal_t *data = malloc(sizeof(recal_t) * num_rg);
+  if (!data && num_rg > 0) {
+    fprintf(stderr, "Memory allocation failed for recal data\n");
+    return NULL;
+  }
   for (i=0; i < num_rg; i++) {
     data[i].Quality = 0;
     data[i].Observations = 0;
@@ -454,7 +470,10 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     j = 0;
     while (iter = sam_header2key_val(iter, "RG", "ID", KNOWN_RGFIELD[i], &key, &val)) {
       rg_data[i][j] = malloc(sizeof(rg_item_t));
-      if (!rg_data[i][j]) continue;
+      if (!rg_data[i][j]) {
+        fprintf(stderr, "Memory allocation failed for rg_data\n");
+        continue;
+      }
       strncpy(rg_data[i][j]->ID, key, MAX_FIELD - 1);
       rg_data[i][j]->ID[MAX_FIELD - 1] = '\0';
       strncpy(rg_data[i][j]->Value, val, MAX_FIELD - 1);
@@ -464,8 +483,10 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     }
     if (j < MAX_RG) {
       rg_data[i][j] = malloc(sizeof(rg_item_t));
-      rg_data[i][j]->ID[0] = '\0';
-      rg_data[i][j]->Value[0] = '\0';
+      if (rg_data[i][j]) {
+        rg_data[i][j]->ID[0] = '\0';
+        rg_data[i][j]->Value[0] = '\0';
+      }
     }
   }
   for(i = 0; i < 3; i++) {
@@ -601,10 +622,15 @@ int main (int argc, char *argv[])
   int good_rgfield_index;
 
   rg_item_t *rg_data[3][MAX_RG];
+  for(i=0; i<3; i++) {
+    for(j=0; j<MAX_RG; j++) {
+      rg_data[i][j] = NULL;
+    }
+  }
   char *forceable_rg;
   char *rgID;
   char *rg_search;
-  int rg_index;
+  int rg_index = -1;
   int force_rg_index = -1;
 
   sequence = 0;
@@ -613,8 +639,16 @@ int main (int argc, char *argv[])
 
   // read in the recal table
   rglist = malloc(MAX_RG * sizeof(char*));
+  if (!rglist) {
+    fprintf(stderr, "Memory allocation failed for rglist\n");
+    return 1;
+  }
   rglist[0] = NULL;
   recaldata = init_recal(1);
+  if (!recaldata) {
+    free(rglist);
+    return 1;
+  }
   num_rg = read_recal(recal_file, rglist, &recaldata);
   if (use_rg != NULL) {
     force_rg_index = get_rg_index(rglist, use_rg, false);
@@ -624,9 +658,18 @@ int main (int argc, char *argv[])
   }
   init_cache(num_rg);
 
-  if (access(inbam, F_OK) == 0) {	// we are processing a bam file
+  if (inbam && access(inbam, F_OK) == 0) {	// we are processing a bam file
     samfile_t *fp = samopen(inbam, "rb", 0);
+    if (!fp) {
+      fprintf(stderr, "Cannot open BAM file %s\n", inbam);
+      return 1;
+    }
     samfile_t *outfp = samopen(outfile, "wb", fp->header);
+    if (!outfp) {
+      fprintf(stderr, "Cannot open output BAM file %s\n", outfile);
+      samclose(fp);
+      return 1;
+    }
     bam_header_t *bh = fp->header;
     // set up rg_data so we can map from IDs back to read groups, which then
     // will get matched in rglist to choose the right recalibration data
@@ -726,7 +769,7 @@ int main (int argc, char *argv[])
     samclose(fp);
     return(0);
 
-  } else if (access(infastq, F_OK) == 0) {	// processing a fastq file
+  } else if (infastq && access(infastq, F_OK) == 0) {	// processing a fastq file
 
     gzFile fp;
     gzFile outp;

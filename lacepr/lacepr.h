@@ -1,4 +1,5 @@
 #define MAX_CYCLE 1024
+#define MAX_CYCLE_BINS (2 * MAX_CYCLE + 1)
 #define MAX_FIELD 256
 #define MAX_RG 256
 #define MIN_Q 2
@@ -84,11 +85,11 @@ typedef struct {
   int Observations;
   double Errors;
   point_recal_t OrigQual[MAX_Q + 1];
-  recal_set_t Cycle[MAX_CYCLE + 1];
+  recal_set_t Cycle[MAX_CYCLE_BINS];
   recal_set_t Context[MAX_CONTEXT + 1];
 } recal_t;
 
-typedef int cache_t[MAX_REASONABLE_Q + 1][MAX_CONTEXT + 1][MAX_CYCLE + 1];
+typedef int cache_t[MAX_Q + 1][MAX_CONTEXT + 1][MAX_CYCLE_BINS];
 
 // http://stackoverflow.com/questions/3981510/getline-check-if-line-is-whitespace
 int whitespaceline (const char *s) {
