@@ -7,3 +7,8 @@
 **Vulnerability:** Use of two-argument `open()` with user-supplied filenames in `lacer.pl`.
 **Learning:** In Perl, the two-argument `open(FH, $filename)` can execute commands if `$filename` starts with a pipe (`|`). This is a classic command injection vector.
 **Prevention:** Always use the three-argument form `open(my $fh, '<', $filename)` and lexical filehandles. This explicitly separates the open mode from the filename, preventing injection.
+
+## 2025-05-16 - NULL Pointer Dereference and Insecure realloc in lacepr
+**Vulnerability:** Use of uninitialized pointers in `access()` and failure to update caller's pointer after `realloc()` in `read_recal`.
+**Learning:** Command-line argument pointers in C were passed to `access()` without initialization or NULL checks, leading to crashes if arguments were missing. In `read_recal`, `realloc` was used on a pointer passed by value, meaning the caller still held the potentially freed original pointer.
+**Prevention:** Initialize all pointers to `NULL`, validate them before use, and pass pointers-to-pointers (e.g., `recal_t **data_ptr`) to functions that resize memory to ensure the caller's reference is updated.
