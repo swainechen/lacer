@@ -17,3 +17,8 @@
 **Vulnerability:** Heap buffer overflow when accessing `Cycle` and `cache` arrays with indices from `get_cycle_index`, plus multiple missing NULL checks for `malloc` and `samopen`.
 **Learning:** The `Cycle` array was sized to `MAX_CYCLE + 1`, but `get_cycle_index` could return values up to `2 * MAX_CYCLE`. This mismatch caused out-of-bounds writes. Also, `cache` was indexed by quality up to `MAX_Q` but only sized for `MAX_REASONABLE_Q`.
 **Prevention:** Ensure array dimensions fully cover the range of all potential index transformation functions. Implement defensive bounds checks at the point of access in high-frequency functions and strictly validate all memory allocations and library resource handles (like `HTSlib`'s `samopen`).
+
+## 2025-05-18 - Sticky Variable State and Missing Library Call Validation in lacepr
+**Vulnerability:** Data integrity risk from "sticky" read group indices in BAM processing and potential NULL pointer dereference if `gzopen` fails.
+**Learning:** In high-frequency record processing loops, variables like `rg_index` that are conditionally updated can retain state from previous records if not explicitly reset. Additionally, external library calls for file I/O (like `htslib`'s `gzopen`) were assumed to always succeed.
+**Prevention:** Always reset per-record state at the beginning of processing loops. Strictly validate the return values of all library-provided resource acquisition functions (e.g., `gzopen`, `samopen`, `malloc`) before usage.
