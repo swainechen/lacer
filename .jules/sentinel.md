@@ -22,3 +22,8 @@
 **Vulnerability:** Data integrity risk from "sticky" read group indices in BAM processing and potential NULL pointer dereference if `gzopen` fails.
 **Learning:** In high-frequency record processing loops, variables like `rg_index` that are conditionally updated can retain state from previous records if not explicitly reset. Additionally, external library calls for file I/O (like `htslib`'s `gzopen`) were assumed to always succeed.
 **Prevention:** Always reset per-record state at the beginning of processing loops. Strictly validate the return values of all library-provided resource acquisition functions (e.g., `gzopen`, `samopen`, `malloc`) before usage.
+
+## 2025-05-19 - OOB Array Access via Malformed Recalibration Files in lacepr
+**Vulnerability:** Out-of-bounds (OOB) memory access when parsing GATK-style recalibration tables in `read_recal`, where `rgindex`, `qual`, and `covindex` were used as array indices without bounds checking.
+**Learning:** External data from files (even those typically produced by trusted tools like `lacer.pl`) must be treated as untrusted. Indices derived from `sscanf` can exceed array dimensions, leading to heap/stack corruption.
+**Prevention:** Always implement explicit bounds checks (e.g., `if (index >= 0 && index < MAX_SIZE)`) immediately after parsing and before using the index to access any array or allocated memory.

@@ -149,7 +149,7 @@ int newq (uint8_t origq, int cycle, char preceding, char current, recal_t *recal
     adjust_con = delta(running_q, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Observations, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Errors);
 //printf("base %d, context %s, index %d, obs %d, err %f, adjust_q %d\n", running_q, context, con_i, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Observations, recaldata[recaldata_index].Context[con_i].OrigQual[origq].Errors, adjust_con);
   }
-  if (recaldata[recaldata_index].Cycle[get_cycle_index(cycle)].OrigQual[origq].Observations > 0) {
+  if (recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Observations > 0) {
     adjust_cyc = delta(running_q, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Observations, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Errors);
 //printf("base %d, cycle %d, index %d, obs %d, err %f, adjust_q %d\n", running_q, cycle, cyc_i, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Observations, recaldata[recaldata_index].Cycle[cyc_i].OrigQual[origq].Errors, adjust_cyc);
   }
@@ -344,6 +344,10 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 parsed = sscanf(in, "%255s %3s %lf %lf %d %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
                 if (parsed == 6) {
                   rgindex = get_rg_index(rglist, rg, true);
+                  if (rgindex < 0 || rgindex >= MAX_RG) {
+                    fprintf(stderr, "Invalid read group index %d\n", rgindex);
+                    continue;
+                  }
                   temp_table0[rgindex].Quality = lround(empqual);
                   temp_table0[rgindex].Observations = obs;
                   temp_table0[rgindex].Errors = err;
@@ -396,6 +400,10 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 parsed = sscanf(in, "%255s %d %3s %lf %d %lf", rg, &qual, eventtype, &empqual, &obs, &err);
                 if (parsed == 6 && strcmp(eventtype,"M") == 0) {
                   rgindex = get_rg_index(rglist, rg, false);
+                  if (rgindex < 0 || rgindex >= num_rg || qual < 0 || qual > MAX_Q) {
+                    fprintf(stderr, "Invalid RG index %d or Quality %d\n", rgindex, qual);
+                    continue;
+                  }
                   data[rgindex].OrigQual[qual].Quality = lround(empqual);
                   data[rgindex].OrigQual[qual].Observations = obs;
                   data[rgindex].OrigQual[qual].Errors = err;
@@ -420,16 +428,20 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 parsed = sscanf(in, "%255s %d %255s %255s %3s %lf %d %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
                 if (parsed == 8 && strcmp(eventtype,"M") == 0) {
                   rgindex = get_rg_index(rglist, rg, false);
+                  if (rgindex < 0 || rgindex >= num_rg || qual < 0 || qual > MAX_Q) {
+                    fprintf(stderr, "Invalid RG index %d or Quality %d\n", rgindex, qual);
+                    continue;
+                  }
                   if (strcmp(covname, "Cycle") == 0) {
                     // covariate is a string but if it's cycle it's a number
-                    if ((covindex = get_cycle_index(atoi(covariate))) != -1) {
+                    if ((covindex = get_cycle_index(atoi(covariate))) != -1 && covindex < MAX_CYCLE_BINS) {
                       data[rgindex].Cycle[covindex].OrigQual[qual].Quality = lround(empqual);
                       data[rgindex].Cycle[covindex].OrigQual[qual].Observations = obs;
                       data[rgindex].Cycle[covindex].OrigQual[qual].Errors = err;
 //                  printf("Table 2: %d, %s, %d, %s, %s, %s, %f, %d, %f\n", parsed, rg, qual, covariate, covname, eventtype, empqual, data[rgindex].Cycle[covindex].OrigQual[qual].Observations, data[rgindex].Cycle[covindex].OrigQual[qual].Errors);
                     }
                   } else if (strcmp(covname, "Context") == 0) {
-                    if ((covindex = get_context_index(covariate)) != -1) {
+                    if ((covindex = get_context_index(covariate)) != -1 && covindex <= MAX_CONTEXT) {
                       data[rgindex].Context[covindex].OrigQual[qual].Quality = lround(empqual);
                       data[rgindex].Context[covindex].OrigQual[qual].Observations = obs;
                       data[rgindex].Context[covindex].OrigQual[qual].Errors = err;
