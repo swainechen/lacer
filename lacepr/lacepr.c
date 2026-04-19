@@ -23,6 +23,7 @@ const char* const KNOWN_RGFIELD[] = { "PU", "LB", "SM" };
 
 KSEQ_INIT(gzFile, gzread);
 cache_t *cache;
+int num_recal_rg = 0;
 
 void init_cache (int n) {
   int i, j, k, l;
@@ -125,7 +126,7 @@ int newq (uint8_t origq, int cycle, char preceding, char current, recal_t *recal
   int con_i = get_context_index(context);
   int cyc_i = get_cycle_index(cycle);
 
-  if (origq > MAX_Q || recaldata_index < 0 || con_i < 0 || con_i > MAX_CONTEXT || cyc_i < 0 || cyc_i >= MAX_CYCLE_BINS) {
+  if (origq > MAX_Q || recaldata_index < 0 || recaldata_index >= num_recal_rg || con_i < 0 || con_i > MAX_CONTEXT || cyc_i < 0 || cyc_i >= MAX_CYCLE_BINS) {
     return origq;
   }
 
@@ -650,6 +651,7 @@ int main (int argc, char *argv[])
     return 1;
   }
   num_rg = read_recal(recal_file, rglist, &recaldata);
+  num_recal_rg = num_rg;
   if (use_rg != NULL) {
     force_rg_index = get_rg_index(rglist, use_rg, false);
     if (force_rg_index == -1) {
@@ -682,6 +684,7 @@ int main (int argc, char *argv[])
 
     b = bam_init1();
     while ((bytes = samread(fp, b)) > 0) {
+      rg_index = -1;
       qlen = b->core.l_qseq;
       if (qlen + 1 > max_length) {
         max_length = qlen + 1;
@@ -805,6 +808,11 @@ int main (int argc, char *argv[])
       outfile = new_outfile;
     }
     outp = gzopen(outfile, "w");
+    if (!outp) {
+      fprintf(stderr, "Cannot open output FastQ file %s\n", outfile);
+      gzclose(fp);
+      return 1;
+    }
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0) {
       sequence = seq->seq.s;
