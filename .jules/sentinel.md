@@ -27,3 +27,8 @@
 **Vulnerability:** Out-of-bounds (OOB) memory access when parsing GATK-style recalibration tables in `read_recal`, where `rgindex`, `qual`, and `covindex` were used as array indices without bounds checking.
 **Learning:** External data from files (even those typically produced by trusted tools like `lacer.pl`) must be treated as untrusted. Indices derived from `sscanf` can exceed array dimensions, leading to heap/stack corruption.
 **Prevention:** Always implement explicit bounds checks (e.g., `if (index >= 0 && index < MAX_SIZE)`) immediately after parsing and before using the index to access any array or allocated memory.
+
+## 2025-05-20 - Stack Exhaustion and Memory Safety in lacepr
+**Vulnerability:** Potential stack overflow via VLA, NULL pointer dereference in library calls, and unsafe realloc usage.
+**Learning:** `lacepr.c` used a variable-length array (VLA) on the stack for BAM record backups, which poses a DoS risk for large records. It also failed to validate `gzopen` handles and used an unsafe `realloc` pattern that could leak memory on failure.
+**Prevention:** Avoid VLAs for variable data on the stack; use direct pointer offsets or heap allocation. Always use a temporary pointer with `realloc` and validate all external resource handles (like `gzFile`) immediately after acquisition.

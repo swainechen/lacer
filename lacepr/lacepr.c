@@ -505,7 +505,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
   for(i = 0; i < 3; i++) {
     rg_check[i] = true;
     for(j = 0; j < MAX_RG; j++) {
-      if (rg_data[i][j]->Value[0] == '\0') {
+      if (rg_data[i][j] == NULL || rg_data[i][j]->Value[0] == '\0') {
         if (j == 0) { rg_check[i] = false; }
         break;
       } else if (get_rg_index(rglist, rg_data[i][j]->Value, false) < 0) {
@@ -707,12 +707,9 @@ int main (int argc, char *argv[])
       sequence[qlen] = '\0';
 //    quality[qlen] = '\0';
       rawdata = bam_get_seq(b);
-      uint8_t backup[b->l_data];
-      for(i=0; i < b->l_data; i++) {
-        backup[i] = b->data[i];
-      }
+      // Removed stack-allocated backup array to prevent stack overflow
       int offset = ((b)->core.n_cigar<<2) + (b)->core.l_qname + (((b)->core.l_qseq + 1)>>1);
-      quality = backup + offset;
+      quality = b->data + offset;
 
       // deal with read groups again
       rg_search = NULL;
@@ -782,6 +779,21 @@ int main (int argc, char *argv[])
     bam_destroy1(b);
     samclose(outfp);
     samclose(fp);
+
+    // Cleanup dynamically allocated resources
+    for (i = 0; i < MAX_RG; i++) {
+      if (rglist[i]) free(rglist[i]);
+    }
+    free(rglist);
+    free(recaldata);
+    free(cache);
+    for (i = 0; i < 3; i++) {
+      for (j = 0; j < MAX_RG; j++) {
+        if (rg_data[i][j]) free(rg_data[i][j]);
+      }
+    }
+    if (sequence) free(sequence);
+
     return(0);
 
   } else if (infastq && access(infastq, F_OK) == 0) {	// processing a fastq file
@@ -808,6 +820,10 @@ int main (int argc, char *argv[])
     // read fastq and recalibrate
     // we are going to only output gzipped files
     fp = gzopen(infastq, "r");
+    if (!fp) {
+      fprintf(stderr, "Cannot open input FastQ file %s\n", infastq);
+      return 1;
+    }
     size_t outlen = strlen(outfile);
     if (outlen < 3 || strcmp(outfile + outlen - 3, ".gz") != 0) {
       char *new_outfile = malloc(outlen + 4);
@@ -832,7 +848,16 @@ int main (int argc, char *argv[])
       quality = seq->qual.s;
       if (qlen + 1 > newquality_size) {
         newquality_size = qlen + 1;
-        newquality = realloc(newquality, newquality_size);
+        char *tmp_q = realloc(newquality, newquality_size);
+        if (!tmp_q) {
+          fprintf(stderr, "Memory allocation failed for newquality\n");
+          free(newquality);
+          kseq_destroy(seq);
+          gzclose(fp);
+          gzclose(outp);
+          return 1;
+        }
+        newquality = tmp_q;
       }
       if (newquality) {
         strcpy(newquality, quality);
@@ -858,6 +883,21 @@ int main (int argc, char *argv[])
     kseq_destroy(seq);
     gzclose(fp);
     gzclose(outp);
+    free(newquality);
   }
+
+  // Cleanup dynamically allocated resources
+  for (i = 0; i < MAX_RG; i++) {
+    if (rglist[i]) free(rglist[i]);
+  }
+  free(rglist);
+  free(recaldata);
+  free(cache);
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < MAX_RG; j++) {
+      if (rg_data[i][j]) free(rg_data[i][j]);
+    }
+  }
+
   return(0);
 }
