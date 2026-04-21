@@ -32,3 +32,8 @@
 **Vulnerability:** Potential stack overflow via VLA, NULL pointer dereference in library calls, and unsafe realloc usage.
 **Learning:** `lacepr.c` used a variable-length array (VLA) on the stack for BAM record backups, which poses a DoS risk for large records. It also failed to validate `gzopen` handles and used an unsafe `realloc` pattern that could leak memory on failure.
 **Prevention:** Avoid VLAs for variable data on the stack; use direct pointer offsets or heap allocation. Always use a temporary pointer with `realloc` and validate all external resource handles (like `gzFile`) immediately after acquisition.
+
+## 2025-05-21 - Double-Free and Length Mismatch Vulnerabilities in FASTQ Processing
+**Vulnerability:** Double-free of internal `kseq` buffers and potential heap buffer overflow due to missing length validation between sequence and quality strings in FASTQ records.
+**Learning:** Assigning global pointers to internal library buffers (like `kseq`'s `seq.s`) that are managed by the library (e.g., freed via `kseq_destroy`) can lead to double-free vulnerabilities if the global pointer is also explicitly freed. Furthermore, assuming that sequence and quality strings in a FASTQ file are always the same length and null-terminated can lead to out-of-bounds access if only `strlen` is used.
+**Prevention:** Use local pointers for temporary library-managed buffers to avoid accidental double-frees. Always validate that related data fields (like sequence and quality in FASTQ) have matching lengths using the library's provided length fields before processing, and use length-limited copy functions like `memcpy` with manual null-termination.

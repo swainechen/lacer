@@ -843,9 +843,13 @@ int main (int argc, char *argv[])
     }
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0) {
-      sequence = seq->seq.s;
-      qlen = strlen(sequence);
-      quality = seq->qual.s;
+      char *seq_ptr = seq->seq.s;
+      char *qual_ptr = seq->qual.s;
+      if (seq->seq.l != seq->qual.l) {
+        fprintf(stderr, "Sequence and quality lengths differ for %s; skipping\n", seq->name.s);
+        continue;
+      }
+      qlen = (int)seq->seq.l;
       if (qlen + 1 > newquality_size) {
         newquality_size = qlen + 1;
         char *tmp_q = realloc(newquality, newquality_size);
@@ -860,24 +864,25 @@ int main (int argc, char *argv[])
         newquality = tmp_q;
       }
       if (newquality) {
-        strcpy(newquality, quality);
+        memcpy(newquality, qual_ptr, qlen);
+        newquality[qlen] = '\0';
       }
       for (i = 0; i < qlen; i++) {
-        current = sequence[i];
+        current = seq_ptr[i];
         cycle = i+1;
         if (read_pairnum == 2) { cycle = -cycle; }
         if (i > 0) {
-          preceding = sequence[i-1];
+          preceding = seq_ptr[i-1];
         } else {
           preceding = '.';
         }
-        debug && fprintf(stderr, "cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", cycle, sequence[i], preceding, current, quality[i] - 33, newq(quality[i] - 33, cycle, preceding, current, recaldata, rg_index));
-        newquality[i] = newq(quality[i] - 33, cycle, preceding, current, recaldata, rg_index) + 33;
+        debug && fprintf(stderr, "cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", cycle, seq_ptr[i], preceding, current, qual_ptr[i] - 33, newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index));
+        newquality[i] = newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index) + 33;
       }
-      if (seq->comment.s == NULL || strlen(seq->comment.s) < 1) {
-        gzprintf(outp, "@%s\n%s\n+\n%s\n", seq->name.s, sequence, newquality);
+      if (seq->comment.s == NULL || seq->comment.l < 1) {
+        gzprintf(outp, "@%s\n%s\n+\n%s\n", seq->name.s, seq_ptr, newquality);
       } else {
-        gzprintf(outp, "@%s %s\n%s\n+\n%s\n", seq->name.s, seq->comment.s, sequence, newquality);
+        gzprintf(outp, "@%s %s\n%s\n+\n%s\n", seq->name.s, seq->comment.s, seq_ptr, newquality);
       }
     }
     kseq_destroy(seq);
