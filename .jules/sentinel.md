@@ -37,3 +37,8 @@
 **Vulnerability:** Double-free of internal `kseq` buffers and potential heap buffer overflow due to missing length validation between sequence and quality strings in FASTQ records.
 **Learning:** Assigning global pointers to internal library buffers (like `kseq`'s `seq.s`) that are managed by the library (e.g., freed via `kseq_destroy`) can lead to double-free vulnerabilities if the global pointer is also explicitly freed. Furthermore, assuming that sequence and quality strings in a FASTQ file are always the same length and null-terminated can lead to out-of-bounds access if only `strlen` is used.
 **Prevention:** Use local pointers for temporary library-managed buffers to avoid accidental double-frees. Always validate that related data fields (like sequence and quality in FASTQ) have matching lengths using the library's provided length fields before processing, and use length-limited copy functions like `memcpy` with manual null-termination.
+
+## 2025-05-22 - Partial Initialization and Unsafe realloc in lacepr.c
+**Vulnerability:** Uninitialized memory usage due to incorrect loop boundaries in `init_recal` and potential memory leaks/crashes from unsafe `realloc` usage.
+**Learning:** Arrays sized by constants like `MAX_CONTEXT + 1` or `MAX_CYCLE_BINS` must be fully initialized using the same constants as loop boundaries. Additionally, assigning `realloc` results directly to the original pointer leads to memory leaks if allocation fails, as the handle to the original block is lost.
+**Prevention:** Always use the exact array size constant (or size-calculating expression) for loop boundaries during initialization. In C, always use a temporary pointer for `realloc` and only update the original pointer after verifying success.
