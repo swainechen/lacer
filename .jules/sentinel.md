@@ -37,3 +37,8 @@
 **Vulnerability:** Double-free of internal `kseq` buffers and potential heap buffer overflow due to missing length validation between sequence and quality strings in FASTQ records.
 **Learning:** Assigning global pointers to internal library buffers (like `kseq`'s `seq.s`) that are managed by the library (e.g., freed via `kseq_destroy`) can lead to double-free vulnerabilities if the global pointer is also explicitly freed. Furthermore, assuming that sequence and quality strings in a FASTQ file are always the same length and null-terminated can lead to out-of-bounds access if only `strlen` is used.
 **Prevention:** Use local pointers for temporary library-managed buffers to avoid accidental double-frees. Always validate that related data fields (like sequence and quality in FASTQ) have matching lengths using the library's provided length fields before processing, and use length-limited copy functions like `memcpy` with manual null-termination.
+
+## 2026-04-23 - Uninitialized Memory in Complex Structures
+**Vulnerability:** Use of uninitialized heap memory in `lacepr.c` due to incorrect manual initialization loops for large nested arrays (`Cycle`, `Context`).
+**Learning:** Manual initialization of complex, multi-dimensional arrays is error-prone. Using `malloc` followed by loops can easily miss elements if loop boundaries are slightly off (e.g., using `MAX_CYCLE` instead of `MAX_CYCLE_BINS`).
+**Prevention:** Prefer `calloc` for initial allocation of large structures to ensure the entire memory block is zero-initialized by the allocator. For reallocated memory, always use `memset` to zero-initialize the newly added space.
