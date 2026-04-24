@@ -5,6 +5,8 @@
 #include <float.h>
 #include <math.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 #include "sam.h"
 #include "sam_header.h"
 #include "htslib/sam.h"
@@ -257,35 +259,10 @@ int get_cycle_index (int i) {
 
 // assume we just get an unallocated pointer, make memory and initialize
 recal_t* init_recal (int num_rg) {
-  int i, j, k;
-  recal_t *data = malloc(sizeof(recal_t) * num_rg);
+  recal_t *data = calloc(num_rg, sizeof(recal_t));
   if (!data && num_rg > 0) {
     fprintf(stderr, "Memory allocation failed for recal data\n");
     return NULL;
-  }
-  for (i=0; i < num_rg; i++) {
-    data[i].Quality = 0;
-    data[i].Observations = 0;
-    data[i].Errors = 0;
-    for (j=0; j < MAX_Q+1; j++) {
-      data[i].OrigQual[j].Quality = 0;
-      data[i].OrigQual[j].Observations = 0;
-      data[i].OrigQual[j].Errors = 0;
-    }
-    for (j=0; j < MAX_CONTEXT+1; j++) {
-      for (k=0; k < MAX_Q+1; k++) {
-        data[i].Context[j].OrigQual[k].Quality = 0;
-        data[i].Context[j].OrigQual[k].Observations = 0;
-        data[i].Context[j].OrigQual[k].Errors = 0;
-      }
-    }
-    for (j=0; j < MAX_CYCLE_BINS; j++) {
-      for (k=0; k < MAX_Q+1; k++) {
-        data[i].Cycle[j].OrigQual[k].Quality = 0;
-        data[i].Cycle[j].OrigQual[k].Observations = 0;
-        data[i].Cycle[j].OrigQual[k].Errors = 0;
-      }
-    }
   }
   return data;
 }
@@ -380,6 +357,11 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 free(in);
                 fclose(r);
                 return 0;
+              }
+              // The original data had 1 element (initialized in main)
+              // Ensure newly added elements are zero-initialized
+              if (num_rg > 1) {
+                memset(data + 1, 0, sizeof(recal_t) * (num_rg - 1));
               }
               *data_ptr = data;
 	      for (i = 0; i < num_rg; i++) {
