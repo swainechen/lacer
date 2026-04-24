@@ -29,11 +29,12 @@ int num_recal_rg = 0;
 
 void init_cache (int n) {
   int i, j, k, l;
-  cache = realloc(cache, n * sizeof(cache_t));
-  if (!cache && n > 0) {
+  cache_t *tmp_cache = realloc(cache, n * sizeof(cache_t));
+  if (!tmp_cache && n > 0) {
     fprintf(stderr, "Memory allocation failed for cache\n");
     return;
   }
+  cache = tmp_cache;
   for (i=0; i < n; i++) {
     for (j=0; j < MAX_Q+1; j++) {
       for (k=0; k < MAX_CONTEXT+1; k++) {
@@ -516,7 +517,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
       for(i = 0; i < 3; i++) {
         fprintf(stderr, "- RG Field %s\n", KNOWN_RGFIELD[i]);
         for(j = 0; j < MAX_RG; j++) {
-          if (rg_data[i][j]->Value[0] == '\0') { break; }
+          if (rg_data[i][j] == NULL || rg_data[i][j]->Value[0] == '\0') { break; }
           fprintf(stderr, "  %s\n", rg_data[i][j]->Value);
         }
       }
@@ -645,6 +646,15 @@ int main (int argc, char *argv[])
     return 1;
   }
   num_rg = read_recal(recal_file, rglist, &recaldata);
+  if (num_rg <= 0) {
+    fprintf(stderr, "Failed to read recalibration file or no read groups found\n");
+    for (i = 0; i < MAX_RG; i++) {
+      if (rglist[i]) free(rglist[i]);
+    }
+    free(rglist);
+    if (recaldata) free(recaldata);
+    return 1;
+  }
   num_recal_rg = num_rg;
   if (use_rg != NULL) {
     force_rg_index = get_rg_index(rglist, use_rg, false);
@@ -683,7 +693,13 @@ int main (int argc, char *argv[])
       if (qlen + 1 > max_length) {
         max_length = qlen + 1;
         kroundup32(max_length);
-        sequence = realloc(sequence, max_length);
+        int8_t *tmp_sequence = realloc(sequence, max_length);
+        if (!tmp_sequence) {
+          fprintf(stderr, "Memory allocation failed for sequence\n");
+          break; // Exit the loop if we can't allocate memory
+        } else {
+          sequence = tmp_sequence;
+        }
 //      quality = realloc(quality, max_length);
       }
       sequence[qlen] = '\0';
@@ -704,7 +720,7 @@ int main (int argc, char *argv[])
 
         if (rgID) {
           for (i = 0; i < MAX_RG; i++) {
-            if (rg_data[good_rgfield_index][i]->Value[0] == '\0') {
+            if (rg_data[good_rgfield_index][i] == NULL || rg_data[good_rgfield_index][i]->Value[0] == '\0') {
               break;
             }
             if (strcmp(rg_data[good_rgfield_index][i]->ID, rgID) == 0) {

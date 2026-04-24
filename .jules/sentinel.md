@@ -42,3 +42,7 @@
 **Vulnerability:** Use of uninitialized heap memory in `lacepr.c` due to incorrect manual initialization loops for large nested arrays (`Cycle`, `Context`).
 **Learning:** Manual initialization of complex, multi-dimensional arrays is error-prone. Using `malloc` followed by loops can easily miss elements if loop boundaries are slightly off (e.g., using `MAX_CYCLE` instead of `MAX_CYCLE_BINS`).
 **Prevention:** Prefer `calloc` for initial allocation of large structures to ensure the entire memory block is zero-initialized by the allocator. For reallocated memory, always use `memset` to zero-initialize the newly added space.
+## 2025-05-22 - Partial Initialization and Unsafe realloc in lacepr.c
+**Vulnerability:** Uninitialized memory usage due to incorrect loop boundaries in `init_recal` and potential memory leaks/crashes from unsafe `realloc` usage.
+**Learning:** Arrays sized by constants like `MAX_CONTEXT + 1` or `MAX_CYCLE_BINS` must be fully initialized using the same constants as loop boundaries. Additionally, assigning `realloc` results directly to the original pointer leads to memory leaks if allocation fails, as the handle to the original block is lost.
+**Prevention:** Always use the exact array size constant (or size-calculating expression) for loop boundaries during initialization. In C, always use a temporary pointer for `realloc` and only update the original pointer after verifying success.
