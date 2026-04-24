@@ -304,7 +304,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
   while ( (bytes = getline(&in, &n, r)) != -1 ) {
     if (bytes > 0) {
       tkn = strtok(in, ":");
-      if (tkn[0] == '#') {
+      if (tkn != NULL && tkn[0] == '#') {
         while (tkn != NULL) {
           tkn = strtok(NULL, ":");
           if (tkn != NULL) {
