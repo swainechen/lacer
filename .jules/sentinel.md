@@ -51,3 +51,7 @@
 **Vulnerability:** Potential crash and undefined behavior in `lacepr.c` due to `strtok` state corruption after buffer reallocation, plus memory leaks on `realloc` failure.
 **Learning:** Calling `strtok(NULL, ...)` after a `getline` call that modifies or reallocates the input buffer results in undefined behavior because `strtok`'s internal pointer refers to the old buffer. Additionally, the `data = realloc(data, ...)` pattern leaks memory if allocation fails.
 **Prevention:** Exit parsing loops with `break` immediately after operations that modify the input buffer to prevent `strtok` from using invalid state. Always use a temporary pointer for `realloc` and validate success before updating the original variable.
+## 2026-04-24 - NULL Pointer Dereference via strtok in lacepr.c
+**Vulnerability:** In `lacepr.c`, the result of `strtok(in, ":")` was immediately dereferenced (`tkn[0]`) without checking if the line contained any delimiters.
+**Learning:** `strtok` returns `NULL` if no delimiters are found in the string (or if the string is empty). Untrusted files (like recalibration tables) can contain malformed lines that trigger this.
+**Prevention:** Always verify that the return value of `strtok` (and similar string parsing functions) is not `NULL` before dereferencing it, especially when processing external input.
