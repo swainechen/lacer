@@ -46,3 +46,8 @@
 **Vulnerability:** Uninitialized memory usage due to incorrect loop boundaries in `init_recal` and potential memory leaks/crashes from unsafe `realloc` usage.
 **Learning:** Arrays sized by constants like `MAX_CONTEXT + 1` or `MAX_CYCLE_BINS` must be fully initialized using the same constants as loop boundaries. Additionally, assigning `realloc` results directly to the original pointer leads to memory leaks if allocation fails, as the handle to the original block is lost.
 **Prevention:** Always use the exact array size constant (or size-calculating expression) for loop boundaries during initialization. In C, always use a temporary pointer for `realloc` and only update the original pointer after verifying success.
+
+## 2026-05-23 - strtok State Invalidation and Memory Safety in read_recal
+**Vulnerability:** Potential crash and undefined behavior in `lacepr.c` due to `strtok` state corruption after buffer reallocation, plus memory leaks on `realloc` failure.
+**Learning:** Calling `strtok(NULL, ...)` after a `getline` call that modifies or reallocates the input buffer results in undefined behavior because `strtok`'s internal pointer refers to the old buffer. Additionally, the `data = realloc(data, ...)` pattern leaks memory if allocation fails.
+**Prevention:** Exit parsing loops with `break` immediately after operations that modify the input buffer to prevent `strtok` from using invalid state. Always use a temporary pointer for `realloc` and validate success before updating the original variable.
