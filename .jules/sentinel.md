@@ -46,3 +46,8 @@
 **Vulnerability:** Uninitialized memory usage due to incorrect loop boundaries in `init_recal` and potential memory leaks/crashes from unsafe `realloc` usage.
 **Learning:** Arrays sized by constants like `MAX_CONTEXT + 1` or `MAX_CYCLE_BINS` must be fully initialized using the same constants as loop boundaries. Additionally, assigning `realloc` results directly to the original pointer leads to memory leaks if allocation fails, as the handle to the original block is lost.
 **Prevention:** Always use the exact array size constant (or size-calculating expression) for loop boundaries during initialization. In C, always use a temporary pointer for `realloc` and only update the original pointer after verifying success.
+
+## 2026-04-24 - NULL Pointer Dereference via strtok in lacepr.c
+**Vulnerability:** In `lacepr.c`, the result of `strtok(in, ":")` was immediately dereferenced (`tkn[0]`) without checking if the line contained any delimiters.
+**Learning:** `strtok` returns `NULL` if no delimiters are found in the string (or if the string is empty). Untrusted files (like recalibration tables) can contain malformed lines that trigger this.
+**Prevention:** Always verify that the return value of `strtok` (and similar string parsing functions) is not `NULL` before dereferencing it, especially when processing external input.
