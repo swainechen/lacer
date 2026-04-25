@@ -350,14 +350,15 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 fclose(r);
 		return(0);
               }
-              data = realloc(data, sizeof(recal_t) * num_rg);
-              if (!data) {
+              recal_t *tmp_data = realloc(data, sizeof(recal_t) * num_rg);
+              if (!tmp_data) {
                 fprintf(stderr, "Memory allocation failed for recal data\n");
                 free(temp_table0);
                 free(in);
                 fclose(r);
                 return 0;
               }
+              data = tmp_data;
               // The original data had 1 element (initialized in main)
               // Ensure newly added elements are zero-initialized
               if (num_rg > 1) {
@@ -369,6 +370,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 data[i].Observations = temp_table0[i].Observations;
                 data[i].Errors = temp_table0[i].Errors;
               }
+              break;
             } else if (strcmp(tkn, "RecalTable1") == 0) {
               // RecalTable1 should be:
               // 0 - ReadGroup
@@ -395,6 +397,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 }
 //                printf("Table 1: %d, %s, %d, %s, %f, %d, %f\n", parsed, rg, qual, eventtype, empqual, data[rgindex].OrigQual[qual].Observations, data[rgindex].OrigQual[qual].Errors);
               }
+              break;
             } else if (strcmp(tkn, "RecalTable2") == 0) {
               // RecalTable2 should be:
               // 0 - ReadGroup
@@ -436,6 +439,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                   fprintf (stderr, "Parse error for RecalTable2 on line:\n%s", in);
                 }
               }
+              break;
             }
           }
         }
