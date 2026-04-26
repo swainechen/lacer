@@ -181,6 +181,8 @@ int get_rg_index (char** rglist, char* rg, bool insert) {
       if (rglist[0]) {
         strncpy(rglist[0], rg, MAX_FIELD - 1);
         rglist[0][MAX_FIELD - 1] = '\0';
+      } else {
+        return(-1);
       }
       rglist[1] = NULL;
       return(0);
@@ -195,6 +197,8 @@ int get_rg_index (char** rglist, char* rg, bool insert) {
           if (rglist[i]) {
             strncpy(rglist[i], rg, MAX_FIELD - 1);
             rglist[i][MAX_FIELD - 1] = '\0';
+          } else {
+            return(-1);
           }
 	  if (i+1 < MAX_RG) { rglist[i+1] = NULL; }
 	  return(i);
@@ -638,12 +642,11 @@ int main (int argc, char *argv[])
   rg = 0;
 
   // read in the recal table
-  rglist = malloc(MAX_RG * sizeof(char*));
+  rglist = calloc(MAX_RG, sizeof(char*));
   if (!rglist) {
     fprintf(stderr, "Memory allocation failed for rglist\n");
     return 1;
   }
-  rglist[0] = NULL;
   recaldata = init_recal(1);
   if (!recaldata) {
     free(rglist);
@@ -686,6 +689,8 @@ int main (int argc, char *argv[])
     if (force_rg_index == -1) {
       good_rgfield_index = read_group_check(fp, rglist, num_rg, rg_data, rg_field);
       if (good_rgfield_index == -1) {
+        samclose(outfp);
+        samclose(fp);
         return(-1);
       }
     }

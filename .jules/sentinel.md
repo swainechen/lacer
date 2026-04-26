@@ -55,3 +55,8 @@
 **Vulnerability:** In `lacepr.c`, the result of `strtok(in, ":")` was immediately dereferenced (`tkn[0]`) without checking if the line contained any delimiters.
 **Learning:** `strtok` returns `NULL` if no delimiters are found in the string (or if the string is empty). Untrusted files (like recalibration tables) can contain malformed lines that trigger this.
 **Prevention:** Always verify that the return value of `strtok` (and similar string parsing functions) is not `NULL` before dereferencing it, especially when processing external input.
+
+## 2026-04-26 - Uninitialized Pointer Arrays and Resource Leaks on Error Paths
+**Vulnerability:** Use of uninitialized pointer arrays (`rglist`) and file handle leaks in the BAM processing branch.
+**Learning:** Initializing an array of pointers with `malloc` leaves the entries containing junk data, which can cause `get_rg_index` to incorrectly identify "unused" slots or cause `free()` to crash during cleanup. Additionally, failing to close external library handles (like `samfile_t`) on early exit paths leads to resource exhaustion.
+**Prevention:** Always use `calloc` for arrays of pointers to ensure they are zero-initialized. Ensure all acquired resources (files, library handles) are explicitly released on every possible error return path before exiting a function or the program.
