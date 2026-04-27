@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "sam.h"
 #include "sam_header.h"
 #include "htslib/sam.h"
@@ -230,6 +231,7 @@ int nt2int (char s) {
 int get_context_index (char *s) {
   int i = 0;
   int sum = 0;
+  if (strlen(s) > CONTEXT_LENGTH) { return 0; }
   while (s[i] != '\0') {
     sum *= 4;
     if (s[i] == 'A') {
@@ -255,7 +257,7 @@ int get_context_index (char *s) {
 int get_cycle_index (int i) {
   if (i > 0 && i <= MAX_CYCLE) {
     return (i*2-1);
-  } else if (i < 0 && -i <= MAX_CYCLE) {
+  } else if (i < 0 && i != INT_MIN && -i <= MAX_CYCLE) {
     return (-i*2);
   }
   return 0;	// bad data
@@ -298,7 +300,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
     fprintf(stderr, "Cannot open recal file %s\n", file);
     return 0;
   }
-  temp_table0 = malloc(MAX_RG * sizeof(point_recal_t));
+  temp_table0 = calloc(MAX_RG, sizeof(point_recal_t));
   if (!temp_table0) {
     fprintf(stderr, "Memory allocation failed for temp_table0\n");
     fclose(r);

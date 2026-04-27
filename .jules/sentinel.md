@@ -60,3 +60,8 @@
 **Vulnerability:** Use of uninitialized pointer arrays (`rglist`) and file handle leaks in the BAM processing branch.
 **Learning:** Initializing an array of pointers with `malloc` leaves the entries containing junk data, which can cause `get_rg_index` to incorrectly identify "unused" slots or cause `free()` to crash during cleanup. Additionally, failing to close external library handles (like `samfile_t`) on early exit paths leads to resource exhaustion.
 **Prevention:** Always use `calloc` for arrays of pointers to ensure they are zero-initialized. Ensure all acquired resources (files, library handles) are explicitly released on every possible error return path before exiting a function or the program.
+
+## 2026-04-27 - Integer Overflows and Uninitialized Memory in lacepr.c
+**Vulnerability:** Integer overflow in context indexing, undefined behavior in cycle indexing, and uninitialized memory usage in recalibration parsing.
+**Learning:** Utility functions in C often lack defensive checks on input ranges. Specifically, base-4 indexing without length checks can overflow 32-bit integers, and negating `INT_MIN` is undefined. Using `malloc` for temporary structures can leave stale data if not all entries are overwritten during parsing.
+**Prevention:** Always validate input string lengths before performing base-N calculations. Explicitly check for `INT_MIN` before negation. Prefer `calloc` for zero-initialization of temporary buffers to ensure deterministic behavior on malformed inputs.
