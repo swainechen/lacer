@@ -65,3 +65,8 @@
 **Vulnerability:** Integer overflow in context indexing, undefined behavior in cycle indexing, and uninitialized memory usage in recalibration parsing.
 **Learning:** Utility functions in C often lack defensive checks on input ranges. Specifically, base-4 indexing without length checks can overflow 32-bit integers, and negating `INT_MIN` is undefined. Using `malloc` for temporary structures can leave stale data if not all entries are overwritten during parsing.
 **Prevention:** Always validate input string lengths before performing base-N calculations. Explicitly check for `INT_MIN` before negation. Prefer `calloc` for zero-initialization of temporary buffers to ensure deterministic behavior on malformed inputs.
+
+## 2026-04-28 - Resource Leak and Potential Crash in read_group_check
+**Vulnerability:** Memory leak and missing NULL check in `lacepr.c` when parsing BAM headers.
+**Learning:** The function `sam_header_parse2` was called without validating its return value and without ever freeing the allocated memory. Since this happened inside a loop, it led to a predictable memory leak and potential DoS.
+**Prevention:** Always validate return values of library functions that allocate resources. When using opaque handles or iterators, ensure the original allocation is tracked separately and explicitly released using the library's provided cleanup function (e.g., `sam_header_free`).

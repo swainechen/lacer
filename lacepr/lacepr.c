@@ -472,7 +472,9 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
 
   rg_ok = -1;
   for(i = 0; i < 3; i++) {
-    iter = sam_header_parse2(fp->header->text);
+    void *header_ptr = sam_header_parse2(fp->header->text);
+    if (!header_ptr) continue;
+    iter = header_ptr;
     j = 0;
     while (iter = sam_header2key_val(iter, "RG", "ID", KNOWN_RGFIELD[i], &key, &val)) {
       rg_data[i][j] = malloc(sizeof(rg_item_t));
@@ -494,6 +496,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
         rg_data[i][j]->Value[0] = '\0';
       }
     }
+    sam_header_free(header_ptr);
   }
   for(i = 0; i < 3; i++) {
     rg_check[i] = true;
