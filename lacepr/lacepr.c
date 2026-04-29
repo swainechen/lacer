@@ -617,13 +617,13 @@ int main (int argc, char *argv[])
   char preceding;
   char current;
   int cycle;
-  int i;
-  int j;
+  size_t i;
+  size_t j;
   int debug = 0;
-  int qlen;
-  int max_length = 0;
-  int max_aux = 0;
-  int lines = 0;
+  size_t qlen;
+  size_t max_length = 0;
+  size_t max_aux = 0;
+  size_t lines = 0;
   int8_t seq_comp_table[16] = { 0, 8, 4, 12, 2, 10, 9, 14, 1, 6, 5, 13, 3, 11, 7, 15 };
   recal_t *recaldata;
   char *q_pointer;
@@ -779,7 +779,7 @@ int main (int argc, char *argv[])
         if (b->core.flag & 128) {	// second of a pair
           cycle = -cycle;
         }
-        debug && fprintf(stderr, "rgID %s, cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", rgID, cycle, sequence[i], preceding, current, quality[i], newq(quality[i], cycle, preceding, current, recaldata, rg_index));
+        debug && fprintf(stderr, "rgID %s, cycle %d, sequence %zu, pre %c, cur %c, orig %d, new %d\n", rgID, cycle, (size_t)sequence[i], preceding, current, quality[i], newq(quality[i], cycle, preceding, current, recaldata, rg_index));
 	if (force_rg_index == -1) {
           q_pointer[i] = newq(quality[i], cycle, preceding, current, recaldata, rg_index);
         } else {
@@ -861,7 +861,7 @@ int main (int argc, char *argv[])
         fprintf(stderr, "Sequence and quality lengths differ for %s; skipping\n", seq->name.s);
         continue;
       }
-      qlen = (int)seq->seq.l;
+      qlen = seq->seq.l;
       if (qlen + 1 > newquality_size) {
         newquality_size = qlen + 1;
         char *tmp_q = realloc(newquality, newquality_size);
@@ -888,7 +888,7 @@ int main (int argc, char *argv[])
         } else {
           preceding = '.';
         }
-        debug && fprintf(stderr, "cycle %d, sequence %d, pre %c, cur %c, orig %d, new %d\n", cycle, seq_ptr[i], preceding, current, qual_ptr[i] - 33, newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index));
+        debug && fprintf(stderr, "cycle %d, sequence %c, pre %c, cur %c, orig %d, new %d\n", cycle, seq_ptr[i], preceding, current, qual_ptr[i] - 33, newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index));
         newquality[i] = newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index) + 33;
       }
       if (seq->comment.s == NULL || seq->comment.l < 1) {

@@ -70,3 +70,8 @@
 **Vulnerability:** Memory leak and missing NULL check in `lacepr.c` when parsing BAM headers.
 **Learning:** The function `sam_header_parse2` was called without validating its return value and without ever freeing the allocated memory. Since this happened inside a loop, it led to a predictable memory leak and potential DoS.
 **Prevention:** Always validate return values of library functions that allocate resources. When using opaque handles or iterators, ensure the original allocation is tracked separately and explicitly released using the library's provided cleanup function (e.g., `sam_header_free`).
+
+## 2026-04-29 - Integer Truncation and Overflow in Record Lengths
+**Vulnerability:** Integer truncation and potential heap buffer overflow due to use of signed `int` for sequence lengths (`qlen`, `max_length`) and loop counters.
+**Learning:** Genomic sequences and BAM/FASTQ files can exceed 2GB (^{31}-1$ bytes), causing signed `int` lengths to overflow to negative values. Casting an unsigned `size_t` (from `kseq`) to `int` and then using it in `memcpy` (which expects `size_t`) results in a massive overflow.
+**Prevention:** Use `size_t` for all memory-related lengths, buffer sizes, and array indices. Avoid manual casts from unsigned to signed types for length data. Use the `%zu` format specifier when printing `size_t` to ensure portable and safe output.
