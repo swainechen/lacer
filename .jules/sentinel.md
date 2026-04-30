@@ -70,3 +70,7 @@
 **Vulnerability:** Memory leak and missing NULL check in `lacepr.c` when parsing BAM headers.
 **Learning:** The function `sam_header_parse2` was called without validating its return value and without ever freeing the allocated memory. Since this happened inside a loop, it led to a predictable memory leak and potential DoS.
 **Prevention:** Always validate return values of library functions that allocate resources. When using opaque handles or iterators, ensure the original allocation is tracked separately and explicitly released using the library's provided cleanup function (e.g., `sam_header_free`).
+## 2026-04-30 - [Resource Management in C]
+**Vulnerability:** Memory leaks and file handle exhaustion on early return paths in complex C functions.
+**Learning:** Complex C functions with multiple branches and early returns (e.g., for error handling) are highly prone to resource leaks if deallocation is handled locally at each return point.
+**Prevention:** Use a centralized cleanup pattern (e.g., `goto cleanup;`) with all resource pointers initialized to `NULL`. This ensures that all resources are safely and consistently released regardless of which path the function takes.
