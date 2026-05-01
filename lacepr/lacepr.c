@@ -845,7 +845,7 @@ int main (int argc, char *argv[])
         fprintf(stderr, "Sequence and quality lengths differ for %s; skipping\n", kseq_seq->name.s);
         continue;
       }
-      qlen = kseq->seq.l;
+      qlen = kseq_seq->seq.l;
       if (qlen + 1 > newquality_size) {
         newquality_size = qlen + 1;
         char *tmp_q = realloc(newquality, newquality_size);
