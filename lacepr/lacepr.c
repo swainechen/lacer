@@ -603,15 +603,15 @@ int main (int argc, char *argv[])
   }
 
   // main declarations
-  bam1_t *b;
+  bam1_t *b = NULL;
   uint8_t *rawdata;
-  int8_t *sequence;
+  int8_t *sequence = NULL;
   uint8_t *quality;
   uint8_t *aux;
   int bytes;
   uint8_t *rg;
   char *rg_const = "foo";
-  char **rglist;
+  char **rglist = NULL;
   int num_rg = 0;
   char *temp;
   char preceding;
@@ -625,10 +625,18 @@ int main (int argc, char *argv[])
   size_t max_aux = 0;
   size_t lines = 0;
   int8_t seq_comp_table[16] = { 0, 8, 4, 12, 2, 10, 9, 14, 1, 6, 5, 13, 3, 11, 7, 15 };
-  recal_t *recaldata;
+  recal_t *recaldata = NULL;
   char *q_pointer;
   uint8_t *q_temp;
   int good_rgfield_index;
+  int res = 1;
+  samfile_t *sam_fp = NULL;
+  samfile_t *sam_outfp = NULL;
+  gzFile gz_fp = NULL;
+  gzFile gz_outp = NULL;
+  kseq_t *kseq_seq = NULL;
+  char *newquality = NULL;
+  char *malloced_outfile = NULL;
 
   rg_item_t *rg_data[3][MAX_RG];
   for(i=0; i<3; i++) {
@@ -642,30 +650,22 @@ int main (int argc, char *argv[])
   int rg_index = -1;
   int force_rg_index = -1;
 
-  sequence = 0;
+  sequence = NULL;
   quality = NULL;
-  rg = 0;
+  rg = NULL;
 
   // read in the recal table
   rglist = calloc(MAX_RG, sizeof(char*));
   if (!rglist) {
     fprintf(stderr, "Memory allocation failed for rglist\n");
-    return 1;
+    goto cleanup;
   }
   recaldata = init_recal(1);
-  if (!recaldata) {
-    free(rglist);
-    return 1;
-  }
+  if (!recaldata) goto cleanup;
   num_rg = read_recal(recal_file, rglist, &recaldata);
   if (num_rg <= 0) {
     fprintf(stderr, "Failed to read recalibration file or no read groups found\n");
-    for (i = 0; i < MAX_RG; i++) {
-      if (rglist[i]) free(rglist[i]);
-    }
-    free(rglist);
-    if (recaldata) free(recaldata);
-    return 1;
+    goto cleanup;
   }
   num_recal_rg = num_rg;
   if (use_rg != NULL) {
@@ -677,31 +677,32 @@ int main (int argc, char *argv[])
   init_cache(num_rg);
 
   if (inbam && access(inbam, F_OK) == 0) {	// we are processing a bam file
-    samfile_t *fp = samopen(inbam, "rb", 0);
-    if (!fp) {
+    sam_fp = samopen(inbam, "rb", 0);
+    if (!sam_fp) {
       fprintf(stderr, "Cannot open BAM file %s\n", inbam);
-      return 1;
+      goto cleanup;
     }
-    samfile_t *outfp = samopen(outfile, "wb", fp->header);
-    if (!outfp) {
+    sam_outfp = samopen(outfile, "wb", sam_fp->header);
+    if (!sam_outfp) {
       fprintf(stderr, "Cannot open output BAM file %s\n", outfile);
-      samclose(fp);
-      return 1;
+      goto cleanup;
     }
-    bam_header_t *bh = fp->header;
     // set up rg_data so we can map from IDs back to read groups, which then
     // will get matched in rglist to choose the right recalibration data
     if (force_rg_index == -1) {
-      good_rgfield_index = read_group_check(fp, rglist, num_rg, rg_data, rg_field);
+      good_rgfield_index = read_group_check(sam_fp, rglist, num_rg, rg_data, rg_field);
       if (good_rgfield_index == -1) {
-        samclose(outfp);
-        samclose(fp);
-        return(-1);
+        res = -1;
+        goto cleanup;
       }
     }
 
     b = bam_init1();
-    while ((bytes = samread(fp, b)) > 0) {
+    if (!b) {
+      fprintf(stderr, "Memory allocation failed for bam1_t\n");
+      goto cleanup;
+    }
+    while ((bytes = samread(sam_fp, b)) > 0) {
       rg_index = -1;
       qlen = b->core.l_qseq;
       if (qlen + 1 > max_length) {
@@ -710,7 +711,8 @@ int main (int argc, char *argv[])
         int8_t *tmp_sequence = realloc(sequence, max_length);
         if (!tmp_sequence) {
           fprintf(stderr, "Memory allocation failed for sequence\n");
-          break; // Exit the loop if we can't allocate memory
+          res = 1;
+          goto cleanup;
         } else {
           sequence = tmp_sequence;
         }
@@ -786,35 +788,14 @@ int main (int argc, char *argv[])
           q_pointer[i] = newq(quality[i], cycle, preceding, current, recaldata, force_rg_index);
         }
       }
-      samwrite(outfp, b);
+      samwrite(sam_outfp, b);
     }
-    bam_destroy1(b);
-    samclose(outfp);
-    samclose(fp);
-
-    // Cleanup dynamically allocated resources
-    for (i = 0; i < MAX_RG; i++) {
-      if (rglist[i]) free(rglist[i]);
-    }
-    free(rglist);
-    free(recaldata);
-    free(cache);
-    for (i = 0; i < 3; i++) {
-      for (j = 0; j < MAX_RG; j++) {
-        if (rg_data[i][j]) free(rg_data[i][j]);
-      }
-    }
-    if (sequence) free(sequence);
-
-    return(0);
+    res = 0;
+    goto cleanup;
 
   } else if (infastq && access(infastq, F_OK) == 0) {	// processing a fastq file
 
-    gzFile fp;
-    gzFile outp;
-    kseq_t *seq;
     int l;
-    char *newquality;
     size_t newquality_size = MAX_FIELD;
     newquality = malloc(newquality_size);
 
@@ -831,47 +812,46 @@ int main (int argc, char *argv[])
 
     // read fastq and recalibrate
     // we are going to only output gzipped files
-    fp = gzopen(infastq, "r");
-    if (!fp) {
+    gz_fp = gzopen(infastq, "r");
+    if (!gz_fp) {
       fprintf(stderr, "Cannot open input FastQ file %s\n", infastq);
-      return 1;
+      goto cleanup;
     }
     size_t outlen = strlen(outfile);
     if (outlen < 3 || strcmp(outfile + outlen - 3, ".gz") != 0) {
-      char *new_outfile = malloc(outlen + 4);
-      if (new_outfile == NULL) {
+      malloced_outfile = malloc(outlen + 4);
+      if (malloced_outfile == NULL) {
         fprintf(stderr, "Memory allocation failed for outfile name\n");
-        return(1);
+        goto cleanup;
       }
-      strcpy(new_outfile, outfile);
-      strcat(new_outfile, ".gz");
-      outfile = new_outfile;
+      strcpy(malloced_outfile, outfile);
+      strcat(malloced_outfile, ".gz");
+      outfile = malloced_outfile;
     }
-    outp = gzopen(outfile, "w");
-    if (!outp) {
+    gz_outp = gzopen(outfile, "w");
+    if (!gz_outp) {
       fprintf(stderr, "Cannot open output FastQ file %s\n", outfile);
-      gzclose(fp);
-      return 1;
+      goto cleanup;
     }
-    seq = kseq_init(fp);
-    while ((l = kseq_read(seq)) >= 0) {
-      char *seq_ptr = seq->seq.s;
-      char *qual_ptr = seq->qual.s;
-      if (seq->seq.l != seq->qual.l) {
-        fprintf(stderr, "Sequence and quality lengths differ for %s; skipping\n", seq->name.s);
+    kseq_seq = kseq_init(gz_fp);
+    if (!kseq_seq) {
+      fprintf(stderr, "Memory allocation failed for kseq\n");
+      goto cleanup;
+    }
+    while ((l = kseq_read(kseq_seq)) >= 0) {
+      char *seq_ptr = kseq_seq->seq.s;
+      char *qual_ptr = kseq_seq->qual.s;
+      if (kseq_seq->seq.l != kseq_seq->qual.l) {
+        fprintf(stderr, "Sequence and quality lengths differ for %s; skipping\n", kseq_seq->name.s);
         continue;
       }
-      qlen = seq->seq.l;
+      qlen = kseq->seq.l;
       if (qlen + 1 > newquality_size) {
         newquality_size = qlen + 1;
         char *tmp_q = realloc(newquality, newquality_size);
         if (!tmp_q) {
           fprintf(stderr, "Memory allocation failed for newquality\n");
-          free(newquality);
-          kseq_destroy(seq);
-          gzclose(fp);
-          gzclose(outp);
-          return 1;
+          goto cleanup;
         }
         newquality = tmp_q;
       }
@@ -891,30 +871,40 @@ int main (int argc, char *argv[])
         debug && fprintf(stderr, "cycle %d, sequence %c, pre %c, cur %c, orig %d, new %d\n", cycle, seq_ptr[i], preceding, current, qual_ptr[i] - 33, newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index));
         newquality[i] = newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index) + 33;
       }
-      if (seq->comment.s == NULL || seq->comment.l < 1) {
-        gzprintf(outp, "@%s\n%s\n+\n%s\n", seq->name.s, seq_ptr, newquality);
+      if (kseq_seq->comment.s == NULL || kseq_seq->comment.l < 1) {
+        gzprintf(gz_outp, "@%s\n%s\n+\n%s\n", kseq_seq->name.s, seq_ptr, newquality);
       } else {
-        gzprintf(outp, "@%s %s\n%s\n+\n%s\n", seq->name.s, seq->comment.s, seq_ptr, newquality);
+        gzprintf(gz_outp, "@%s %s\n%s\n+\n%s\n", kseq_seq->name.s, kseq_seq->comment.s, seq_ptr, newquality);
       }
     }
-    kseq_destroy(seq);
-    gzclose(fp);
-    gzclose(outp);
-    free(newquality);
+    res = 0;
   }
 
+cleanup:
+  if (b) bam_destroy1(b);
+  if (sam_fp) samclose(sam_fp);
+  if (sam_outfp) samclose(sam_outfp);
+  if (kseq_seq) kseq_destroy(kseq_seq);
+  if (gz_fp) gzclose(gz_fp);
+  if (gz_outp) gzclose(gz_outp);
+  if (newquality) free(newquality);
+  if (malloced_outfile) free(malloced_outfile);
+
   // Cleanup dynamically allocated resources
-  for (i = 0; i < MAX_RG; i++) {
-    if (rglist[i]) free(rglist[i]);
+  if (rglist) {
+    for (i = 0; i < MAX_RG; i++) {
+      if (rglist[i]) free(rglist[i]);
+    }
+    free(rglist);
   }
-  free(rglist);
-  free(recaldata);
-  free(cache);
+  if (recaldata) free(recaldata);
+  if (cache) free(cache);
   for (i = 0; i < 3; i++) {
     for (j = 0; j < MAX_RG; j++) {
       if (rg_data[i][j]) free(rg_data[i][j]);
     }
   }
+  if (sequence) free(sequence);
 
-  return(0);
+  return(res);
 }
