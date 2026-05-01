@@ -74,3 +74,8 @@
 **Vulnerability:** Memory leaks and file handle exhaustion on early return paths in complex C functions.
 **Learning:** Complex C functions with multiple branches and early returns (e.g., for error handling) are highly prone to resource leaks if deallocation is handled locally at each return point.
 **Prevention:** Use a centralized cleanup pattern (e.g., `goto cleanup;`) with all resource pointers initialized to `NULL`. This ensures that all resources are safely and consistently released regardless of which path the function takes.
+
+## 2026-04-29 - Integer Truncation and Overflow in Record Lengths
+**Vulnerability:** Integer truncation and potential heap buffer overflow due to use of signed `int` for sequence lengths (`qlen`, `max_length`) and loop counters.
+**Learning:** Genomic sequences and BAM/FASTQ files can exceed 2GB (^{31}-1$ bytes), causing signed `int` lengths to overflow to negative values. Casting an unsigned `size_t` (from `kseq`) to `int` and then using it in `memcpy` (which expects `size_t`) results in a massive overflow.
+**Prevention:** Use `size_t` for all memory-related lengths, buffer sizes, and array indices. Avoid manual casts from unsigned to signed types for length data. Use the `%zu` format specifier when printing `size_t` to ensure portable and safe output.
