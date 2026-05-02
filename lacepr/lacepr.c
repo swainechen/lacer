@@ -47,43 +47,16 @@ void init_cache (int n) {
   }
 }
 
-long choose (int n, int k) {
-  long result = 1;
-  int j = 1;
-  if (k == n || k == 0) {
-    return 1;
-  }
-  if (k > n || k < 0 || n < 1) {
-    return 0;
-  }
-  if (n - k < k) {
-    k = n - k;
-  }
-  while (j < k) {
-    result *= n/j;
-    n--;
-    j++;
-  }
-  return result;
-}
-
 double log10binomial (double kd, int n, double p) {
-  int k;
-  double mean;
-  double stdev;
-  k = lround(kd);
-//printf("kd %f, n %d, p %f\n", kd, n, p);
-  if (k >= 0 && n > 0 && p > 0 && p < 1) {
-    if (n > 100) {
-      // use normal approximation
-      mean = n * p;
-      stdev = sqrt(mean * (1 - p));
-      return (-0.5 * ( (k - mean) * (k - mean) / n / p / (1-p) ) / log(10) - 0.5 * log10(2 * M_PI * n * p * (1-p)));
-    } else {
-      return ( log10(choose(n, k)) + k * log10(p) + (n-k) * log10(1-p) );
-    }
+  int k = lround(kd);
+  if (p <= 0 || p >= 1 || k < 0 || k > n) {
+    return -1e100; // Represent near-zero probability for impossible cases
   }
-  return 0;
+  // Log-binomial using lgamma for robustness and precision:
+  // log10(n! / (k!(n-k)!) * p^k * (1-p)^(n-k))
+  double log_binom = lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1);
+  double log_prob = log_binom + k * log(p) + (n - k) * log(1 - p);
+  return log_prob / log(10);
 }
 
 int delta (int origq, int obs, double err) {

@@ -79,3 +79,8 @@
 **Vulnerability:** Integer truncation and potential heap buffer overflow due to use of signed `int` for sequence lengths (`qlen`, `max_length`) and loop counters.
 **Learning:** Genomic sequences and BAM/FASTQ files can exceed 2GB (^{31}-1$ bytes), causing signed `int` lengths to overflow to negative values. Casting an unsigned `size_t` (from `kseq`) to `int` and then using it in `memcpy` (which expects `size_t`) results in a massive overflow.
 **Prevention:** Use `size_t` for all memory-related lengths, buffer sizes, and array indices. Avoid manual casts from unsigned to signed types for length data. Use the `%zu` format specifier when printing `size_t` to ensure portable and safe output.
+
+## 2024-05-24 - Data Integrity and Overflow in Binomial Probability Calculation
+**Vulnerability:** The `choose` function suffered from integer division errors and severe overflow for $n > 30$, leading to incorrect recalibration values. The `log10binomial` function also used an inaccurate normal approximation for $n > 100$.
+**Learning:** Implementing mathematical functions like binomial coefficients using standard integer types is prone to overflow even for moderately small $n$. Integer division within these loops further compounds the error.
+**Prevention:** Use the `lgamma` function from `<math.h>` to compute binomial probabilities in the logarithmic domain. This ensures numerical stability, prevents overflows, and allows for exact calculations across all valid ranges of $n$ and $k$.
