@@ -84,3 +84,8 @@
 **Vulnerability:** The `choose` function suffered from integer division errors and severe overflow for $n > 30$, leading to incorrect recalibration values. The `log10binomial` function also used an inaccurate normal approximation for $n > 100$.
 **Learning:** Implementing mathematical functions like binomial coefficients using standard integer types is prone to overflow even for moderately small $n$. Integer division within these loops further compounds the error.
 **Prevention:** Use the `lgamma` function from `<math.h>` to compute binomial probabilities in the logarithmic domain. This ensures numerical stability, prevents overflows, and allows for exact calculations across all valid ranges of $n$ and $k$.
+
+## 2025-05-25 - String Literal Modification and Allocation Safety in lacepr.c
+**Vulnerability:** Undefined behavior from attempting to modify a string literal in-place and potential NULL pointer dereference in the FASTQ branch.
+**Learning:** Assigning a pointer to a string literal (e.g., `char *field = "PU";`) and then modifying it via `field[2] = '\0'` or `strncpy` results in a segmentation fault or undefined behavior because literals are often stored in read-only memory. Additionally, neglecting NULL checks on initial heap allocations for record processing buffers (like `newquality`) can lead to immediate crashes on memory-constrained systems.
+**Prevention:** Use stack-allocated character arrays (e.g., `char field[3] = "PU";`) for small, fixed-length fields that may be modified by user input. Always implement immediate NULL checks and centralized error handling (e.g., `goto cleanup`) for all heap allocations, even initial ones.
