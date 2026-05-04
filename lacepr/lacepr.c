@@ -316,6 +316,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
               }
 	      // after this first RecalTable0 we should know the read groups
 	      // and we can allocate memory for the real data structure
+	      num_rg = MAX_RG;
 	      for (i = 0; i < MAX_RG; i++) {
                 if (rglist[i] == NULL) {
                   num_rg = i;
@@ -524,7 +525,7 @@ int main (int argc, char *argv[])
   char *outfile = NULL;
   char *recal_file = NULL;
   char *use_rg = NULL;
-  char *rg_field = "PU";
+  char rg_field[3] = "PU";
   int read_pairnum = 1;
   while (1) {
     int option_index = 0;
@@ -542,7 +543,7 @@ int main (int argc, char *argv[])
     if (getopt_c == -1)
       break;
     switch (getopt_c) {
-      case 'f': rg_field = optarg; break;
+      case 'f': strncpy(rg_field, optarg, 2); rg_field[2] = '\0'; break;
       case 'b': inbam = optarg; break;
       case 'q': infastq = optarg; break;
       case 'p': read_pairnum = atoi(optarg); break;
@@ -551,7 +552,6 @@ int main (int argc, char *argv[])
       case 'o': outfile = optarg; break;
     }
   }
-  if(strlen(rg_field) > 2) { rg_field[2] = '\0'; }
 
   if ( !recal_file || !outfile || ( !inbam && !infastq ) ||
        ( (inbam ? access(inbam, F_OK) : -1) != 0 && (infastq ? access(infastq, F_OK) : -1) != 0 ) ||
@@ -771,6 +771,10 @@ int main (int argc, char *argv[])
     int l;
     size_t newquality_size = MAX_FIELD;
     newquality = malloc(newquality_size);
+    if (!newquality) {
+      fprintf(stderr, "Memory allocation failed for newquality\n");
+      goto cleanup;
+    }
 
     if (read_pairnum != 1 && read_pairnum != 2) {
       read_pairnum = 1;	// default value if invalid
