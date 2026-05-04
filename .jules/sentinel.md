@@ -84,3 +84,8 @@
 **Vulnerability:** The `choose` function suffered from integer division errors and severe overflow for $n > 30$, leading to incorrect recalibration values. The `log10binomial` function also used an inaccurate normal approximation for $n > 100$.
 **Learning:** Implementing mathematical functions like binomial coefficients using standard integer types is prone to overflow even for moderately small $n$. Integer division within these loops further compounds the error.
 **Prevention:** Use the `lgamma` function from `<math.h>` to compute binomial probabilities in the logarithmic domain. This ensures numerical stability, prevents overflows, and allows for exact calculations across all valid ranges of $n$ and $k$.
+
+## 2024-05-25 - Unchecked Memory Allocation in lacepr.c
+**Vulnerability:** Initial allocation for `newquality` buffer in the FASTQ processing branch of `main` lacked a NULL check.
+**Learning:** Even initial, small memory allocations in C can fail under memory pressure or malformed inputs, leading to immediate NULL pointer dereference crashes.
+**Prevention:** Always validate the return value of `malloc` and similar allocation functions immediately after acquisition, and use established error-handling patterns like `goto cleanup` to exit gracefully.

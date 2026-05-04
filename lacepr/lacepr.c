@@ -771,6 +771,10 @@ int main (int argc, char *argv[])
     int l;
     size_t newquality_size = MAX_FIELD;
     newquality = malloc(newquality_size);
+    if (!newquality) {
+      fprintf(stderr, "Memory allocation failed for newquality\n");
+      goto cleanup;
+    }
 
     if (read_pairnum != 1 && read_pairnum != 2) {
       read_pairnum = 1;	// default value if invalid
