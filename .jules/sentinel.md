@@ -85,6 +85,10 @@
 **Learning:** Implementing mathematical functions like binomial coefficients using standard integer types is prone to overflow even for moderately small $n$. Integer division within these loops further compounds the error.
 **Prevention:** Use the `lgamma` function from `<math.h>` to compute binomial probabilities in the logarithmic domain. This ensures numerical stability, prevents overflows, and allows for exact calculations across all valid ranges of $n$ and $k$.
 
+## 2024-05-25 - Unchecked Memory Allocation in lacepr.c
+**Vulnerability:** Initial allocation for `newquality` buffer in the FASTQ processing branch of `main` lacked a NULL check.
+**Learning:** Even initial, small memory allocations in C can fail under memory pressure or malformed inputs, leading to immediate NULL pointer dereference crashes.
+**Prevention:** Always validate the return value of `malloc` and similar allocation functions immediately after acquisition, and use established error-handling patterns like `goto cleanup` to exit gracefully.
 ## 2025-05-25 - String Literal Modification and Allocation Safety in lacepr.c
 **Vulnerability:** Undefined behavior from attempting to modify a string literal in-place and potential NULL pointer dereference in the FASTQ branch.
 **Learning:** Assigning a pointer to a string literal (e.g., `char *field = "PU";`) and then modifying it via `field[2] = '\0'` or `strncpy` results in a segmentation fault or undefined behavior because literals are often stored in read-only memory. Additionally, neglecting NULL checks on initial heap allocations for record processing buffers (like `newquality`) can lead to immediate crashes on memory-constrained systems.
