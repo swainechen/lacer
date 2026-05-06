@@ -440,7 +440,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
   int rg_ok = -1; // this will return the KNOWN_RGFIELD index that we can use
   bool rg_check[3];
   void *iter;
-  const char *key, *val;
+  const char *key = NULL, *val = NULL;
   int i;
   int j;
 
@@ -451,6 +451,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     iter = header_ptr;
     j = 0;
     while (iter = sam_header2key_val(iter, "RG", "ID", KNOWN_RGFIELD[i], &key, &val)) {
+      if (key == NULL || val == NULL) continue;
       rg_data[i][j] = malloc(sizeof(rg_item_t));
       if (!rg_data[i][j]) {
         fprintf(stderr, "Memory allocation failed for rg_data\n");
@@ -801,8 +802,7 @@ int main (int argc, char *argv[])
         fprintf(stderr, "Memory allocation failed for outfile name\n");
         goto cleanup;
       }
-      strcpy(malloced_outfile, outfile);
-      strcat(malloced_outfile, ".gz");
+      snprintf(malloced_outfile, outlen + 4, "%s.gz", outfile);
       outfile = malloced_outfile;
     }
     gz_outp = gzopen(outfile, "w");
