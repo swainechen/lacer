@@ -444,6 +444,10 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
   int i;
   int j;
 
+  if (!fp || !fp->header || !fp->header->text) {
+    fprintf(stderr, "Invalid BAM file or missing header text\n");
+    return -1;
+  }
   rg_ok = -1;
   for(i = 0; i < 3; i++) {
     void *header_ptr = sam_header_parse2(fp->header->text);
