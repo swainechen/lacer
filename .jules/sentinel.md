@@ -98,3 +98,8 @@
 **Vulnerability:** Potential NULL pointer dereference in `lacepr.c` when accessing `fp->header->text` without validation.
 **Learning:** Structures provided by external libraries (like `samtools`' `samfile_t`) cannot be assumed to be fully populated. Malformed or empty input files can result in valid library handles that contain NULL pointers for internal data fields like header text.
 **Prevention:** Always implement deep defensive NULL checks when navigating through nested structures provided by external libraries before accessing their members or passing them to other library functions.
+
+## 2024-05-26 - Stale Regex Captures and Implicit Variable Misuse in Perl
+**Vulnerability:** In `lacer.pl`, regex capture variables () were used without verifying match success, and `chomp` was used on the implicit global $_ instead of the explicit loop variable.
+**Learning:** Perl's capture variables like $1 retain their value from the previous successful match if the current match fails. This leads to "sticky" state across loop iterations. Similarly, `chomp` without an argument targets $_ even if a different variable was used to read from the filehandle.
+**Prevention:** Always wrap regex matches in `if` blocks before accessing capture variables. Explicitly specify the target variable for `chomp` when using named loop variables (e.g., `chomp $line`).
