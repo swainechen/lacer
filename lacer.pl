@@ -321,8 +321,9 @@ if (length $region && -f $region) {
   while ($j = <$reg_fh>) {
     next if $j =~ /^#/;
     next if $j =~ /^$/;
-    chomp;
+    chomp $j;
     ($chrom, $start, $end) = split /\s+/, $j;
+    next if !defined $chrom || !defined $start || !defined $end;
     # bed file is 0-based so correct range, but only need start
     $start++;
     for ($i = $start; $i <= $end; $i += $windowsize) {
@@ -379,9 +380,11 @@ if ($USE_READGROUPS) {
   @f = split /\n/, $bam_comments;
   foreach $i (@f) {
     if ($i =~ /^\@RG/) {
-      $i =~ /ID:(\S+)/;
-      $rg = $1;
-      $rg = "NULL" if !defined $rg;
+      if ($i =~ /ID:(\S+)/) {
+        $rg = $1;
+      } else {
+        $rg = "NULL";
+      }
       push(@RG_LIST, $rg);
       foreach $j (qw(ID PL PU LB SM)) {
         if ($i =~ /$j:(\S+)/) {
