@@ -93,3 +93,8 @@
 **Vulnerability:** Undefined behavior from attempting to modify a string literal in-place and potential NULL pointer dereference in the FASTQ branch.
 **Learning:** Assigning a pointer to a string literal (e.g., `char *field = "PU";`) and then modifying it via `field[2] = '\0'` or `strncpy` results in a segmentation fault or undefined behavior because literals are often stored in read-only memory. Additionally, neglecting NULL checks on initial heap allocations for record processing buffers (like `newquality`) can lead to immediate crashes on memory-constrained systems.
 **Prevention:** Use stack-allocated character arrays (e.g., `char field[3] = "PU";`) for small, fixed-length fields that may be modified by user input. Always implement immediate NULL checks and centralized error handling (e.g., `goto cleanup`) for all heap allocations, even initial ones.
+
+## 2026-05-24 - [NULL Pointer Dereference in read_group_check]
+**Vulnerability:** Potential NULL pointer dereference in `lacepr.c` when accessing `fp->header->text` without validation.
+**Learning:** Structures provided by external libraries (like `samtools`' `samfile_t`) cannot be assumed to be fully populated. Malformed or empty input files can result in valid library handles that contain NULL pointers for internal data fields like header text.
+**Prevention:** Always implement deep defensive NULL checks when navigating through nested structures provided by external libraries before accessing their members or passing them to other library functions.
