@@ -47,8 +47,8 @@ void init_cache (int n) {
   }
 }
 
-double log10binomial (double kd, int n, double p) {
-  int k = lround(kd);
+double log10binomial (double kd, long long n, double p) {
+  long long k = llround(kd);
   if (p <= 0 || p >= 1 || k < 0 || k > n) {
     return -1e100; // Represent near-zero probability for impossible cases
   }
@@ -59,7 +59,7 @@ double log10binomial (double kd, int n, double p) {
   return log_prob / log(10);
 }
 
-int delta (int origq, int obs, double err) {
+int delta (int origq, long long obs, double err) {
   int i;
   int maxi = -1;
   double temp;
@@ -262,7 +262,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
   double estqual;
   int qual;
   char eventtype[4];
-  int obs;
+  long long obs;
   double err;
   int rgindex;
   int covindex;
@@ -298,7 +298,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
               bytes = getline(&in, &n, r);
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
                 // Limit input lengths to prevent buffer overflows
-                parsed = sscanf(in, "%255s %3s %lf %lf %d %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
+                parsed = sscanf(in, "%255s %3s %lf %lf %lld %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
                 if (parsed == 6) {
                   rgindex = get_rg_index(rglist, rg, true);
                   if (rgindex < 0 || rgindex >= MAX_RG) {
@@ -362,7 +362,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
               bytes = getline(&in, &n, r);
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
                 // Limit input lengths to prevent buffer overflows
-                parsed = sscanf(in, "%255s %d %3s %lf %d %lf", rg, &qual, eventtype, &empqual, &obs, &err);
+                parsed = sscanf(in, "%255s %d %3s %lf %lld %lf", rg, &qual, eventtype, &empqual, &obs, &err);
                 if (parsed == 6 && strcmp(eventtype,"M") == 0) {
                   rgindex = get_rg_index(rglist, rg, false);
                   if (rgindex < 0 || rgindex >= num_rg || qual < 0 || qual > MAX_Q) {
@@ -391,7 +391,7 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
               bytes = getline(&in, &n, r);
               while ((bytes = getline(&in, &n, r)) != -1 && !whitespaceline(in)) {
                 // Limit input lengths to prevent buffer overflows
-                parsed = sscanf(in, "%255s %d %255s %255s %3s %lf %d %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
+                parsed = sscanf(in, "%255s %d %255s %255s %3s %lf %lld %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
                 if (parsed == 8 && strcmp(eventtype,"M") == 0) {
                   rgindex = get_rg_index(rglist, rg, false);
                   if (rgindex < 0 || rgindex >= num_rg || qual < 0 || qual > MAX_Q) {
