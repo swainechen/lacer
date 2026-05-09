@@ -57,7 +57,7 @@ const double prior[] = {
 
 typedef struct {
   int Quality;
-  int Observations;
+  long long Observations;
   double Errors;
 } point_recal_t;
 
@@ -82,7 +82,7 @@ typedef struct {
 // data[0].Context[5].OrigQual[25].Observations for table 2, context 5, qual 25
 typedef struct {
   int Quality;
-  int Observations;
+  long long Observations;
   double Errors;
   point_recal_t OrigQual[MAX_Q + 1];
   recal_set_t Cycle[MAX_CYCLE_BINS];
@@ -105,3 +105,6 @@ int whitespaceline (const char *s) {
 int get_rg_index (char** rglist, char* rg, bool insert);
 int get_context_index (char *s);
 int get_cycle_index (int c);
+double log10binomial (double kd, long long n, double p);
+int delta (int origq, long long obs, double err);
+int read_recal (char* file, char** rglist, recal_t **data_ptr);
