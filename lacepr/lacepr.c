@@ -66,10 +66,12 @@ int delta (int origq, long long obs, double err) {
   double max = -DBL_MAX;
   double p[MAX_REASONABLE_Q + 1];
   for (i = MIN_Q; i <= MAX_REASONABLE_Q; i++) {
-    if (abs(origq - i) > MAX_USABLE_Q) {
+    long long diff = (long long)origq - i;
+    if (diff < 0) diff = -diff;
+    if (diff > MAX_USABLE_Q) {
       p[i] = prior[MAX_USABLE_Q];
     } else {
-      p[i] = prior[abs(origq - i)];
+      p[i] = prior[diff];
     }
     temp = log10binomial(err, obs, pow(10, -i/10.0));
     if (temp != 0) {
@@ -300,6 +302,12 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 // Limit input lengths to prevent buffer overflows
                 parsed = sscanf(in, "%255s %3s %lf %lf %lld %lf", rg, eventtype, &empqual, &estqual, &obs, &err);
                 if (parsed == 6) {
+                  if (empqual < 0 || empqual > MAX_Q + 10 || isnan(empqual) || isinf(empqual) ||
+                      estqual < 0 || estqual > MAX_Q + 10 || isnan(estqual) || isinf(estqual) ||
+                      obs < 0 || err < 0 || isnan(err) || isinf(err)) {
+                    fprintf(stderr, "Invalid numerical data in RecalTable0: %s", in);
+                    continue;
+                  }
                   rgindex = get_rg_index(rglist, rg, true);
                   if (rgindex < 0 || rgindex >= MAX_RG) {
                     fprintf(stderr, "Invalid read group index %d\n", rgindex);
@@ -364,9 +372,14 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 // Limit input lengths to prevent buffer overflows
                 parsed = sscanf(in, "%255s %d %3s %lf %lld %lf", rg, &qual, eventtype, &empqual, &obs, &err);
                 if (parsed == 6 && strcmp(eventtype,"M") == 0) {
+                  if (qual < 0 || qual > MAX_Q || empqual < 0 || empqual > MAX_Q + 10 ||
+                      isnan(empqual) || isinf(empqual) || obs < 0 || err < 0 || isnan(err) || isinf(err)) {
+                    fprintf(stderr, "Invalid numerical data in RecalTable1: %s", in);
+                    continue;
+                  }
                   rgindex = get_rg_index(rglist, rg, false);
-                  if (rgindex < 0 || rgindex >= num_rg || qual < 0 || qual > MAX_Q) {
-                    fprintf(stderr, "Invalid RG index %d or Quality %d\n", rgindex, qual);
+                  if (rgindex < 0 || rgindex >= num_rg) {
+                    fprintf(stderr, "Invalid RG index %d\n", rgindex);
                     continue;
                   }
                   data[rgindex].OrigQual[qual].Quality = lround(empqual);
@@ -393,9 +406,14 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
                 // Limit input lengths to prevent buffer overflows
                 parsed = sscanf(in, "%255s %d %255s %255s %3s %lf %lld %lf", rg, &qual, covariate, covname, eventtype, &empqual, &obs, &err);
                 if (parsed == 8 && strcmp(eventtype,"M") == 0) {
+                  if (qual < 0 || qual > MAX_Q || empqual < 0 || empqual > MAX_Q + 10 ||
+                      isnan(empqual) || isinf(empqual) || obs < 0 || err < 0 || isnan(err) || isinf(err)) {
+                    fprintf(stderr, "Invalid numerical data in RecalTable2: %s", in);
+                    continue;
+                  }
                   rgindex = get_rg_index(rglist, rg, false);
-                  if (rgindex < 0 || rgindex >= num_rg || qual < 0 || qual > MAX_Q) {
-                    fprintf(stderr, "Invalid RG index %d or Quality %d\n", rgindex, qual);
+                  if (rgindex < 0 || rgindex >= num_rg) {
+                    fprintf(stderr, "Invalid RG index %d\n", rgindex);
                     continue;
                   }
                   if (strcmp(covname, "Cycle") == 0) {
