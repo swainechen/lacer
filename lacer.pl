@@ -235,6 +235,13 @@ __USAGE__
   exit;
 }
 
+# SECURITY: Validate interval and thread parameters to prevent Denial of Service (DoS)
+# Zero or negative values for these parameters can cause infinite loops or
+# resource exhaustion in the processing logic.
+if ($windowsize <= 0 || $svd_bin <= 0 || $covariate_binsize <= 0 || $num_threads <= 0) {
+  die "Error: -window, -svdbin, -covariatebin, and -threads must all be positive integers.\n";
+}
+
 # set up variables and files and such
 if (!length($outfile) || $outfile eq "-") {
   $out_fh = \*STDOUT;
