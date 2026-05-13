@@ -242,6 +242,14 @@ if ($windowsize <= 0 || $svd_bin <= 0 || $covariate_binsize <= 0 || $num_threads
   die "Error: -window, -svdbin, -covariatebin, and -threads must all be positive integers.\n";
 }
 
+# SECURITY: Validate additional numeric parameters to prevent logic errors and potential DoS
+if ($MINMAPQ < 0 || $MINQ < 0 || $stop_bases < 0 || $MAXCOV < 0 || $MINCOV < 0 || $CONSENSUS_TO_PRINT < 0) {
+  die "Error: -mapq, -minq, -stopbases, -coverage, -mincoverage, and -consensus must be non-negative integers.\n";
+}
+if ($min_span < 0 || $min_span > 1 || $MINOR_FREQ < 0 || $MINOR_FREQ > 1) {
+  die "Error: -span and -minor must be between 0 and 1 (inclusive).\n";
+}
+
 # set up variables and files and such
 if (!length($outfile) || $outfile eq "-") {
   $out_fh = \*STDOUT;
