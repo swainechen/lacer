@@ -103,3 +103,8 @@
 **Vulnerability:** In `lacer.pl`, regex capture variables () were used without verifying match success, and `chomp` was used on the implicit global $_ instead of the explicit loop variable.
 **Learning:** Perl's capture variables like $1 retain their value from the previous successful match if the current match fails. This leads to "sticky" state across loop iterations. Similarly, `chomp` without an argument targets $_ even if a different variable was used to read from the filehandle.
 **Prevention:** Always wrap regex matches in `if` blocks before accessing capture variables. Explicitly specify the target variable for `chomp` when using named loop variables (e.g., `chomp $line`).
+
+## 2026-05-14 - Defensive Validation of External Library Handles and Input Data in Perl
+**Vulnerability:** Potential undefined value dereferences and logic errors in `lacer.pl` due to lack of validation for `Bio::DB::Sam` objects and malformed coordinate data in BED/VCF files.
+**Learning:** External library calls (like `Bio::DB::Sam->new`) and parsing of external data files (BED, VCF) were assumed to always succeed or contain valid numeric data. This led to a lack of safe termination paths and potential logic errors when processing malformed or missing input.
+**Prevention:** Implement immediate `die` checks for all critical library-provided handles (`$sam`, `$bam`, `$header`) and use `Scalar::Util::looks_like_number` to validate all coordinate data parsed from external files before performing arithmetic or indexing.

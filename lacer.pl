@@ -70,6 +70,7 @@ $PDL::BIGPDL = 1;	# so Perl doesn't warn
 use Memory::Usage;
 use Term::ProgressBar;
 use Getopt::Long;
+use Scalar::Util qw(looks_like_number);
 Getopt::Long::Configure("pass_through");
 $SIG{INT} = \&sigint_handler;	# so we can stop a little early
 
@@ -259,9 +260,13 @@ if (!length($outfile) || $outfile eq "-") {
   open($out_fh, '>', $outfile) or die "Cannot open $outfile for writing: $!";
 }
 my $sam = Bio::DB::Sam->new(-fasta => $ref_fasta, -bam => $bamfile, -autoindex => 1, -expand_flags => 1);
+die "Error: Failed to initialize Bio::DB::Sam object for $bamfile (check reference file and BAM index).\n" if !defined $sam;
 my $bam = $sam->bam;
+die "Error: Failed to retrieve BAM object from $bamfile.\n" if !defined $bam;
 my $header = $bam->header();
+die "Error: Failed to retrieve BAM header from $bamfile.\n" if !defined $header;
 my $bam_comments = $header->text;
+die "Error: BAM header text is missing or could not be retrieved from $bamfile.\n" if !defined $bam_comments;
 my @seqs = $sam->seq_ids;
 my $i = 0;
 my $first = 0;
@@ -339,6 +344,10 @@ if (length $region && -f $region) {
     chomp $j;
     ($chrom, $start, $end) = split /\s+/, $j;
     next if !defined $chrom || !defined $start || !defined $end;
+    if (!looks_like_number($start) || !looks_like_number($end)) {
+      warn "Warning: Non-numeric coordinates in region file: $j\n";
+      next;
+    }
     # bed file is 0-based so correct range, but only need start
     $start++;
     for ($i = $start; $i <= $end; $i += $windowsize) {
@@ -392,6 +401,7 @@ if ($randomize_regions) {
 #
 if ($USE_READGROUPS) {
   undef $rginfo;
+  my %seen_rg;
   @f = split /\n/, $bam_comments;
   foreach $i (@f) {
     if ($i =~ /^\@RG/) {
@@ -400,6 +410,7 @@ if ($USE_READGROUPS) {
       } else {
         $rg = "NULL";
       }
+      next if $seen_rg{$rg}++;
       push(@RG_LIST, $rg);
       foreach $j (qw(ID PL PU LB SM)) {
         if ($i =~ /$j:(\S+)/) {
@@ -437,6 +448,7 @@ if (-f $vcf) {
     next if /^#/;
     chomp;
     @f = split /\t/, $_;
+    next if !defined $f[0] || !defined $f[1] || !looks_like_number($f[1]);
     if (!defined $VCFPOS->{$f[0]}) {
       my %anon :shared;
       $VCFPOS->{$f[0]} = \%anon;
