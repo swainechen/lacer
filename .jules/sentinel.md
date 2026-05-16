@@ -108,3 +108,8 @@
 **Vulnerability:** Potential undefined value dereferences and logic errors in `lacer.pl` due to lack of validation for `Bio::DB::Sam` objects and malformed coordinate data in BED/VCF files.
 **Learning:** External library calls (like `Bio::DB::Sam->new`) and parsing of external data files (BED, VCF) were assumed to always succeed or contain valid numeric data. This led to a lack of safe termination paths and potential logic errors when processing malformed or missing input.
 **Prevention:** Implement immediate `die` checks for all critical library-provided handles (`$sam`, `$bam`, `$header`) and use `Scalar::Util::looks_like_number` to validate all coordinate data parsed from external files before performing arithmetic or indexing.
+
+## 2026-05-15 - Undefined Behavior in llround and Unchecked realloc
+**Vulnerability:** Undefined behavior (UB) in `log10binomial` when passing `NaN` or out-of-range values to `llround`, and potential NULL pointer dereference in `init_cache` due to unchecked `realloc`.
+**Learning:** Math functions like `llround` have strict input domain requirements that, if violated, lead to UB. Additionally, even "initialization" allocations like those for a cache must be validated, as failure results in subsequent initialization loops writing to a NULL pointer.
+**Prevention:** Always validate floating-point inputs (e.g., `isnan`) and ranges before calling rounding functions. Implement return-status checks for all memory-allocating functions and ensure the caller handles failures gracefully by exiting.

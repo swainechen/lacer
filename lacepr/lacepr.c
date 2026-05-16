@@ -28,12 +28,12 @@ KSEQ_INIT(gzFile, gzread);
 cache_t *cache;
 int num_recal_rg = 0;
 
-void init_cache (int n) {
+int init_cache (int n) {
   int i, j, k, l;
   cache_t *tmp_cache = realloc(cache, n * sizeof(cache_t));
   if (!tmp_cache && n > 0) {
     fprintf(stderr, "Memory allocation failed for cache\n");
-    return;
+    return 0;
   }
   cache = tmp_cache;
   for (i=0; i < n; i++) {
@@ -45,18 +45,22 @@ void init_cache (int n) {
       }
     }
   }
+  return 1;
 }
 
 double log10binomial (double kd, long long n, double p) {
+  if (isnan(kd) || kd < 0 || kd > (double)n) {
+    return -1e100;
+  }
   long long k = llround(kd);
-  if (p <= 0 || p >= 1 || k < 0 || k > n) {
+  if (p <= 0.0 || p >= 1.0 || k < 0 || k > n) {
     return -1e100; // Represent near-zero probability for impossible cases
   }
   // Log-binomial using lgamma for robustness and precision:
   // log10(n! / (k!(n-k)!) * p^k * (1-p)^(n-k))
-  double log_binom = lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1);
-  double log_prob = log_binom + k * log(p) + (n - k) * log(1 - p);
-  return log_prob / log(10);
+  double log_binom = lgamma((double)n + 1.0) - lgamma((double)k + 1.0) - lgamma((double)n - (double)k + 1.0);
+  double log_prob = log_binom + (double)k * log(p) + ((double)n - (double)k) * log(1.0 - p);
+  return log_prob / log(10.0);
 }
 
 int delta (int origq, long long obs, double err) {
@@ -668,9 +672,10 @@ int main (int argc, char *argv[])
     force_rg_index = get_rg_index(rglist, use_rg, false);
     if (force_rg_index == -1) {
       fprintf(stderr, "Can't find data in recalibration file %s for read group %s, aborting.\n", recal_file, use_rg);
+      goto cleanup;
     }
   }
-  init_cache(num_rg);
+  if (!init_cache(num_rg)) goto cleanup;
 
   if (inbam && access(inbam, F_OK) == 0) {	// we are processing a bam file
     sam_fp = samopen(inbam, "rb", 0);
