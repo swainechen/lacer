@@ -703,7 +703,8 @@ int main (int argc, char *argv[])
       fprintf(stderr, "Memory allocation failed for bam1_t\n");
       goto cleanup;
     }
-    while ((bytes = samread(sam_fp, b)) > 0) {
+    while ((bytes = samread(sam_fp, b)) >= 0) {
+      if (bytes == 0) break;
       rg_index = -1;
       qlen = b->core.l_qseq;
       if (qlen + 1 > max_length) {
@@ -789,7 +790,16 @@ int main (int argc, char *argv[])
           q_pointer[i] = newq(quality[i], cycle, preceding, current, recaldata, force_rg_index);
         }
       }
-      samwrite(sam_outfp, b);
+      if (samwrite(sam_outfp, b) < 0) {
+        fprintf(stderr, "Error writing to output BAM file\n");
+        res = 1;
+        goto cleanup;
+      }
+    }
+    if (bytes < -1) {
+      fprintf(stderr, "Error reading from input BAM file\n");
+      res = 1;
+      goto cleanup;
     }
     res = 0;
     goto cleanup;
@@ -876,10 +886,23 @@ int main (int argc, char *argv[])
         newquality[i] = newq(qual_ptr[i] - 33, cycle, preceding, current, recaldata, rg_index) + 33;
       }
       if (kseq_seq->comment.s == NULL || kseq_seq->comment.l < 1) {
-        gzprintf(gz_outp, "@%s\n%s\n+\n%s\n", kseq_seq->name.s, seq_ptr, newquality);
+        if (gzprintf(gz_outp, "@%s\n%s\n+\n%s\n", kseq_seq->name.s, seq_ptr, newquality) <= 0) {
+          fprintf(stderr, "Error writing to output FastQ file\n");
+          res = 1;
+          goto cleanup;
+        }
       } else {
-        gzprintf(gz_outp, "@%s %s\n%s\n+\n%s\n", kseq_seq->name.s, kseq_seq->comment.s, seq_ptr, newquality);
+        if (gzprintf(gz_outp, "@%s %s\n%s\n+\n%s\n", kseq_seq->name.s, kseq_seq->comment.s, seq_ptr, newquality) <= 0) {
+          fprintf(stderr, "Error writing to output FastQ file\n");
+          res = 1;
+          goto cleanup;
+        }
       }
+    }
+    if (l < -1) {
+      fprintf(stderr, "Error reading from input FastQ file\n");
+      res = 1;
+      goto cleanup;
     }
     res = 0;
   }
