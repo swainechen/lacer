@@ -237,10 +237,15 @@ __USAGE__
 }
 
 # SECURITY: Validate interval and thread parameters to prevent Denial of Service (DoS)
-# Zero or negative values for these parameters can cause infinite loops or
-# resource exhaustion in the processing logic.
-if ($windowsize <= 0 || $svd_bin <= 0 || $covariate_binsize <= 0 || $num_threads <= 0) {
-  die "Error: -window, -svdbin, -covariatebin, and -threads must all be positive integers.\n";
+# Extremely small or large values can cause infinite loops, memory exhaustion,
+# or resource starvation in the processing logic.
+if ($windowsize < 1000 || $svd_bin < 100 || $covariate_binsize < 100 || $num_threads <= 0 || $num_threads > 256) {
+  die "Error: -window must be >= 1000, -svdbin/covariatebin must be >= 100, and -threads must be between 1 and 256.\n";
+}
+
+# SECURITY: Validate read group field to prevent logic errors
+if ($rgfield !~ /^(ID|PL|PU|LB|SM)$/) {
+  die "Error: -rgfield must be one of ID, PL, PU, LB, or SM.\n";
 }
 
 # SECURITY: Validate additional numeric parameters to prevent logic errors and potential DoS
@@ -363,6 +368,10 @@ if (length $region && -f $region) {
   if (!$start || !$end) {
     $start = 1;
     $end = $sam->length($chrom);
+    if (!defined $end || $end <= 0) {
+      warn "Warning: Invalid length for chromosome $chrom. Skipping region $region.\n";
+      next;
+    }
   }
   for ($i = $start; $i <= $end; $i += $windowsize) {
     $first = $i;
@@ -375,6 +384,10 @@ if (!scalar @regions) {
   foreach $chrom (@seqs) {
     $start = 1;
     $end = $sam->length($chrom);
+    if (!defined $end || $end <= 0) {
+      warn "Warning: Invalid length for chromosome $chrom. Skipping.\n";
+      next;
+    }
     for ($i = $start; $i <= $end; $i += $windowsize) {
       $first = $i;
       $last = $i+$windowsize-1;
