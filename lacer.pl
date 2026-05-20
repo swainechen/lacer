@@ -364,20 +364,22 @@ if (length $region && -f $region) {
   }
 } elsif (length $region) {
   ($chrom, $range) = split /:/, $region;
-  ($start, $end) = split /-/, $range;
-  if (!$start || !$end) {
+  if (defined $range) {
+    ($start, $end) = split /-/, $range;
+  }
+  if (!defined $start || !defined $end || !looks_like_number($start) || !looks_like_number($end)) {
     $start = 1;
     $end = $sam->length($chrom);
-    if (!defined $end || $end <= 0) {
-      warn "Warning: Invalid length for chromosome $chrom. Skipping region $region.\n";
-      next;
-    }
   }
-  for ($i = $start; $i <= $end; $i += $windowsize) {
-    $first = $i;
-    $last = $i+$windowsize-1;
-    $last = $end if $end < $last;
-    push @regions, "$chrom:$first-$last";
+  if (defined $end && $end > 0 && looks_like_number($start)) {
+    for ($i = $start; $i <= $end; $i += $windowsize) {
+      $first = $i;
+      $last = $i+$windowsize-1;
+      $last = $end if $end < $last;
+      push @regions, "$chrom:$first-$last";
+    }
+  } else {
+    warn "Warning: Invalid coordinates or chromosome $chrom. Skipping region $region.\n";
   }
 }
 if (!scalar @regions) {
