@@ -111,5 +111,10 @@
 
 ## 2026-05-15 - Undefined Behavior in llround and Unchecked realloc
 **Vulnerability:** Undefined behavior (UB) in `log10binomial` when passing `NaN` or out-of-range values to `llround`, and potential NULL pointer dereference in `init_cache` due to unchecked `realloc`.
-**Learning:** Math functions like `llround` have strict input domain requirements that, if violated, lead to UB. Additionally, even "initialization" allocations like those for a cache must be validated, as failure results in subsequent initialization loops writing to a NULL pointer.
-**Prevention:** Always validate floating-point inputs (e.g., `isnan`) and ranges before calling rounding functions. Implement return-status checks for all memory-allocating functions and ensure the caller handles failures gracefully by exiting.
+**Learning:** Math functions like `llround` have strict domain requirements; violating them leads to UB. Even initialization allocations must be validated.
+**Prevention:** Validate floating-point inputs and ranges before calling rounding functions. Check all allocation return statuses.
+
+## 2026-05-20 - Runtime Crash (DoS) via Improper Loop Control in Perl
+**Vulnerability:** A `next` statement was used outside of an explicit loop block in `lacer.pl`'s region parsing logic, causing a fatal error and DoS.
+**Learning:** In Perl, using `next`, `last`, or `redo` outside of a loop block is a fatal error. This can happen when logic is moved into or out of loops during refactoring.
+**Prevention:** Ensure loop control keywords are strictly used within loop scopes. Use structured conditional blocks (`if/else`) for parameter validation outside of loops.
