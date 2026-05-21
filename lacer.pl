@@ -353,6 +353,21 @@ if (length $region && -f $region) {
       warn "Warning: Non-numeric coordinates in region file: $j\n";
       next;
     }
+    # SECURITY: Validate coordinates and cap to chromosome length to prevent DoS
+    # via excessive memory allocation in @regions.
+    if ($start < 0 || $end < 0 || $start > $end) {
+      warn "Warning: Invalid coordinates in region file ($chrom:$start-$end). Skipping.\n";
+      next;
+    }
+    my $max_len_bed = $sam->length($chrom);
+    if (!defined $max_len_bed || $max_len_bed <= 0) {
+      warn "Warning: Chromosome $chrom not found or has invalid length. Skipping region from file.\n";
+      next;
+    }
+    if ($end > $max_len_bed) {
+      $end = $max_len_bed;
+    }
+
     # bed file is 0-based so correct range, but only need start
     $start++;
     for ($i = $start; $i <= $end; $i += $windowsize) {
@@ -371,6 +386,25 @@ if (length $region && -f $region) {
     $start = 1;
     $end = $sam->length($chrom);
   }
+  # SECURITY: Validate coordinates and cap to chromosome length to prevent DoS
+  # via excessive memory allocation in @regions.
+  my $max_len_reg = $sam->length($chrom);
+  if (defined $max_len_reg && $max_len_reg > 0) {
+    if (!defined $start || !looks_like_number($start) || $start < 1) {
+      $start = 1;
+    }
+    if (!defined $end || !looks_like_number($end) || $end > $max_len_reg) {
+      $end = $max_len_reg;
+    }
+    if ($start > $end) {
+      warn "Warning: Invalid region $region (start > end). Skipping.\n";
+      $end = 0; # Trigger skip below
+    }
+  } else {
+    warn "Warning: Chromosome $chrom not found or has invalid length. Skipping region $region.\n";
+    $end = 0;
+  }
+
   if (defined $end && $end > 0 && looks_like_number($start)) {
     for ($i = $start; $i <= $end; $i += $windowsize) {
       $first = $i;
