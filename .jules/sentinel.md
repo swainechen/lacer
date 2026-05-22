@@ -118,3 +118,8 @@
 **Vulnerability:** A `next` statement was used outside of an explicit loop block in `lacer.pl`'s region parsing logic, causing a fatal error and DoS.
 **Learning:** In Perl, using `next`, `last`, or `redo` outside of a loop block is a fatal error. This can happen when logic is moved into or out of loops during refactoring.
 **Prevention:** Ensure loop control keywords are strictly used within loop scopes. Use structured conditional blocks (`if/else`) for parameter validation outside of loops.
+
+## 2026-05-21 - DoS via Autovivification on Shared Hash in Perl
+**Vulnerability:** A runtime crash ("Invalid value for shared scalar") occurred in `lacer.pl` when accessing nested keys of the shared `$VCFPOS` hash if the parent key (chromosome) was missing.
+**Learning:** Perl's autovivification feature automatically creates hash references for missing keys. When a hash is shared using `threads::shared`, this automatic mutation from a worker thread can violate the shared structure's constraints, causing a fatal error.
+**Prevention:** Always use multi-stage defensive checks (e.g., `if (defined $hash->{$key1} && defined $hash->{$key1}->{$key2})`) when reading from shared nested structures to prevent accidental mutation via autovivification.

@@ -559,7 +559,8 @@ sub worker {
     # first pass - call consensus
     return if ($pos < $first || $pos > $last);
     if ($INCLUDEVCF) {
-      return if !defined $VCFPOS->{$seqid}->{$pos};
+      # SECURITY: Prevent autovivification on shared hash which causes runtime crash
+      return if !defined $VCFPOS->{$seqid} || !defined $VCFPOS->{$seqid}->{$pos};
     } else {
       return if defined $VCFPOS->{$seqid} && defined $VCFPOS->{$seqid}->{$pos};
     }
