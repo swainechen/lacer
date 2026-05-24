@@ -22,7 +22,8 @@ const char *version = "0.2";
 // we're only going to accept "real" nts
 const char *nt16_table      = ".AC.G...T.......";
 const char *nt16_table_comp = ".TG.C...A.......";
-const char* const KNOWN_RGFIELD[] = { "PU", "LB", "SM" };
+#define NUM_KNOWN_RGFIELDS 5
+const char* const KNOWN_RGFIELD[] = { "ID", "PL", "PU", "LB", "SM" };
 
 KSEQ_INIT(gzFile, gzread);
 cache_t *cache;
@@ -454,13 +455,13 @@ int read_recal (char* file, char** rglist, recal_t **data_ptr) {
   return(num_rg);
 }
 
-int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_data[3][MAX_RG], char* rg_field) {
+int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_data[NUM_KNOWN_RGFIELDS][MAX_RG], char* rg_field) {
   // read in read groups and collect info to map back later
-  // rg_data has dimensions 3 (for field, use KNOWN_RGFIELD) and MAX_RG
+  // rg_data has dimensions NUM_KNOWN_RGFIELDS (for field, use KNOWN_RGFIELD) and MAX_RG
   // rg_item_t has ID, Value (strings)
   // we'll track size by making the last item rg_data[i][j] = NULL
   int rg_ok = -1; // this will return the KNOWN_RGFIELD index that we can use
-  bool rg_check[3];
+  bool rg_check[NUM_KNOWN_RGFIELDS];
   void *iter;
   const char *key = NULL, *val = NULL;
   int i;
@@ -471,7 +472,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     return -1;
   }
   rg_ok = -1;
-  for(i = 0; i < 3; i++) {
+  for(i = 0; i < NUM_KNOWN_RGFIELDS; i++) {
     void *header_ptr = sam_header_parse2(fp->header->text);
     if (!header_ptr) continue;
     iter = header_ptr;
@@ -499,7 +500,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     }
     sam_header_free(header_ptr);
   }
-  for(i = 0; i < 3; i++) {
+  for(i = 0; i < NUM_KNOWN_RGFIELDS; i++) {
     rg_check[i] = true;
     for(j = 0; j < MAX_RG; j++) {
       if (rg_data[i][j] == NULL || rg_data[i][j]->Value[0] == '\0') {
@@ -514,13 +515,13 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
     }
   }
   if (rg_ok < 0) {
-    for(i = 0; i < 3; i++) {
+    for(i = 0; i < NUM_KNOWN_RGFIELDS; i++) {
       if (rg_check[i]) {
         fprintf(stderr, "RG field specified (%s) doesn't seem to match between recal and bam files\nIt looks like using --field %s may work instead\n", rg_field, KNOWN_RGFIELD[i]);
         break;
       }
     }
-    if (i == 3) {
+    if (i == NUM_KNOWN_RGFIELDS) {
       fprintf(stderr, "Can't seem to find any match for read groups.\n");
       fprintf(stderr, "In the recal file, I see:\n");
       for(j = 0; j < num_rg; j++) {
@@ -528,7 +529,7 @@ int read_group_check (samfile_t *fp, char** rglist, int num_rg, rg_item_t* rg_da
         fprintf(stderr, "  %s\n", rglist[j]);
       }
       fprintf(stderr, "In the bam file, I see:\n");
-      for(i = 0; i < 3; i++) {
+      for(i = 0; i < NUM_KNOWN_RGFIELDS; i++) {
         fprintf(stderr, "- RG Field %s\n", KNOWN_RGFIELD[i]);
         for(j = 0; j < MAX_RG; j++) {
           if (rg_data[i][j] == NULL || rg_data[i][j]->Value[0] == '\0') { break; }
@@ -588,8 +589,8 @@ int main (int argc, char *argv[])
     fprintf(stderr, "  lacepr [ options ] --bam <in.bam> --recal <recal file> --out <out.bam>\n");
     fprintf(stderr, "  lacepr [ options ] --fastq <in fastq.gz> --recal <recal file> --out <out fastq.gz>\n");
     fprintf(stderr, "\nOptions:\n");
-    fprintf(stderr, "  --field PU|LB|SM  for bam input, header field with read group information\n");
-    fprintf(stderr, "                    Default PU.\n");
+    fprintf(stderr, "  --field ID|PL|PU|LB|SM  for bam input, header field with read group information\n");
+    fprintf(stderr, "                          Default PU.\n");
     fprintf(stderr, "  --rg <string>     for bam/fastq input, force usage of data for this read group\n");
     fprintf(stderr, "                    from the recalibration file.\n");
     fprintf(stderr, "  --pair 1|2        for fastq input, specify R1/R2 read. Default 1.\n");
@@ -638,8 +639,22 @@ int main (int argc, char *argv[])
   char *newquality = NULL;
   char *malloced_outfile = NULL;
 
-  rg_item_t *rg_data[3][MAX_RG];
-  for(i=0; i<3; i++) {
+  // Validate rg_field
+  bool valid_field = false;
+  for (i = 0; i < NUM_KNOWN_RGFIELDS; i++) {
+    if (strcmp(rg_field, KNOWN_RGFIELD[i]) == 0) {
+      valid_field = true;
+      break;
+    }
+  }
+  if (!valid_field) {
+    fprintf(stderr, "Error: Invalid field specified with --field: %s\n", rg_field);
+    fprintf(stderr, "Supported fields are: ID, PL, PU, LB, SM\n");
+    return 1;
+  }
+
+  rg_item_t *rg_data[NUM_KNOWN_RGFIELDS][MAX_RG];
+  for(i=0; i<NUM_KNOWN_RGFIELDS; i++) {
     for(j=0; j<MAX_RG; j++) {
       rg_data[i][j] = NULL;
     }
@@ -926,7 +941,7 @@ cleanup:
   }
   if (recaldata) free(recaldata);
   if (cache) free(cache);
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < NUM_KNOWN_RGFIELDS; i++) {
     for (j = 0; j < MAX_RG; j++) {
       if (rg_data[i][j]) free(rg_data[i][j]);
     }
