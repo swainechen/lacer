@@ -460,6 +460,11 @@ if ($USE_READGROUPS) {
         $rg = "NULL";
       }
       next if $seen_rg{$rg}++;
+      # SECURITY: Limit the number of read groups to prevent DoS via memory
+      # exhaustion and ensure compatibility with lacepr's MAX_RG (256).
+      if (scalar @RG_LIST >= 256) {
+        die "Error: Too many read groups (> 256) in BAM header. This may be a DoS attempt or malformed file.\n";
+      }
       push(@RG_LIST, $rg);
       foreach $j (qw(ID PL PU LB SM)) {
         if ($i =~ /$j:(\S+)/) {
