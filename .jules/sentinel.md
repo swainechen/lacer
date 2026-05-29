@@ -94,6 +94,11 @@
 **Learning:** Assigning a pointer to a string literal (e.g., `char *field = "PU";`) and then modifying it via `field[2] = '\0'` or `strncpy` results in a segmentation fault or undefined behavior because literals are often stored in read-only memory. Additionally, neglecting NULL checks on initial heap allocations for record processing buffers (like `newquality`) can lead to immediate crashes on memory-constrained systems.
 **Prevention:** Use stack-allocated character arrays (e.g., `char field[3] = "PU";`) for small, fixed-length fields that may be modified by user input. Always implement immediate NULL checks and centralized error handling (e.g., `goto cleanup`) for all heap allocations, even initial ones.
 
+## 2025-05-27 - Unbounded Read Group Input and DoS in lacer.pl
+**Vulnerability:** Lack of validation on the number of Read Groups (RG) parsed from the BAM header in `lacer.pl`.
+**Learning:** Untrusted input from file headers (like BAM headers) can contain a malicious or malformed number of entries. In `lacer.pl`, an unbounded number of read groups could lead to memory exhaustion (DoS). Furthermore, it caused a mismatch with the hard-coded `MAX_RG` (256) limit in the downstream C component `lacepr`, potentially leading to out-of-bounds access if not checked at the boundary.
+**Prevention:** Always implement strict upper bounds on the number of entries parsed from external file headers. Enforce these limits at the earliest possible stage (e.g., in the pre-processing script) to prevent resource exhaustion and ensure compatibility with downstream components.
+
 ## 2026-05-24 - [NULL Pointer Dereference in read_group_check]
 **Vulnerability:** Potential NULL pointer dereference in `lacepr.c` when accessing `fp->header->text` without validation.
 **Learning:** Structures provided by external libraries (like `samtools`' `samfile_t`) cannot be assumed to be fully populated. Malformed or empty input files can result in valid library handles that contain NULL pointers for internal data fields like header text.

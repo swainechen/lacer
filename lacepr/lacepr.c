@@ -611,7 +611,6 @@ int main (int argc, char *argv[])
   uint8_t *aux;
   int bytes;
   uint8_t *rg;
-  char *rg_const = "foo";
   char **rglist = NULL;
   int num_rg = 0;
   char *temp;
