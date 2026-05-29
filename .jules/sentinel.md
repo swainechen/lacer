@@ -124,6 +124,11 @@
 **Learning:** In Perl, using `next`, `last`, or `redo` outside of a loop block is a fatal error. This can happen when logic is moved into or out of loops during refactoring.
 **Prevention:** Ensure loop control keywords are strictly used within loop scopes. Use structured conditional blocks (`if/else`) for parameter validation outside of loops.
 
+## 2026-05-22 - DoS via unpack Fatal Error in Perl
+**Vulnerability:** In `lacer.pl`, the `unpack` function was called with an `x` (skip) offset derived from BAM record positions without validating that the offset was within the string's length. This caused fatal " 'x' outside of string" exceptions, leading to Denial of Service.
+**Learning:** Perl's `unpack` function is not always safe; certain format characters like `x` trigger fatal errors if they attempt to move the pointer beyond the string boundary. This is particularly risky when offsets are calculated from external data or relative record positions.
+**Prevention:** Always implement defensive bounds checking before calling `unpack` with variable offsets. Verify that `length($string) > $offset` and handle out-of-bounds cases gracefully by returning placeholder values or skipping the record.
+
 ## 2026-05-21 - DoS via Autovivification on Shared Hash in Perl
 **Vulnerability:** A runtime crash ("Invalid value for shared scalar") occurred in `lacer.pl` when accessing nested keys of the shared `$VCFPOS` hash if the parent key (chromosome) was missing.
 **Learning:** Perl's autovivification feature automatically creates hash references for missing keys. When a hash is shared using `threads::shared`, this automatic mutation from a worker thread can violate the shared structure's constraints, causing a fatal error.
