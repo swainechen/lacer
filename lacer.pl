@@ -584,7 +584,13 @@ sub worker {
       $a[$i] = $p->alignment;
       $aln = $a[$i];
       next if !$aln->qual || $aln->qual < $MINMAPQ;
-      $tempq = unpack("x". ($p->qpos) . "C", $aln->_qscore);
+      my $q_scores = $aln->_qscore;
+      # SECURITY: Validate offset and length before unpack to prevent fatal error (DoS)
+      if (!defined $q_scores || length($q_scores) <= $p->qpos) {
+        warn "Warning: Invalid quality scores for alignment at $seqid:$pos. Skipping.\n";
+        next;
+      }
+      $tempq = unpack("x". ($p->qpos) . "C", $q_scores);
       next if $tempq < $MINQ;
       $cov++;
       if ($USE_READGROUPS) {
@@ -1121,7 +1127,11 @@ sub get_context {
   my $l;
   my $base;
 
+  # SECURITY: Validate sequence and position before unpack to prevent fatal DoS
+  if (!defined $sequence) { return ("..", "."); }
   $l = length($sequence);
+  if ($position < 0 || $position >= $l) { return ("..", "."); }
+
   if ($position > 0) {
     ($left, $base) = unpack("x" . ($position - 1) . "A1A1", $sequence);
   } else {
@@ -1152,7 +1162,11 @@ sub get_contextpre {
   # we are giving the two bases before the indicated base here
   my $pre1 = "";
   my $pre2 = "";
+  # SECURITY: Validate sequence and position before unpack to prevent fatal DoS
+  if (!defined $sequence) { return ("..", "."); }
   my $l = length($sequence);
+  if ($position < 0 || $position >= $l) { return ("..", "."); }
+
   my $base;
   if ($strand > 0) {
     if ($position > 1) {
@@ -1201,7 +1215,11 @@ sub get_2base {
   my $temp;
   my $l;
 
+  # SECURITY: Validate sequence and position before unpack to prevent fatal DoS
+  if (!defined $sequence) { return ("..", "."); }
   $l = length($sequence);
+  if ($position < 0 || $position >= $l) { return ("..", "."); }
+
   if ($strand > 0) {
     if ($position > 0) {
       ($preceding, $indicated) = unpack("x" . ($position - 1) . "A1A1", $sequence);
