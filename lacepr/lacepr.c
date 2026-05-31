@@ -739,6 +739,11 @@ int main (int argc, char *argv[])
       rawdata = bam_get_seq(b);
       // Removed stack-allocated backup array to prevent stack overflow
       int offset = ((b)->core.n_cigar<<2) + (b)->core.l_qname + (((b)->core.l_qseq + 1)>>1);
+      if (offset < 0 || (uint32_t)offset + qlen > b->l_data) {
+        fprintf(stderr, "Malformed BAM: record truncated\n");
+        res = 1;
+        goto cleanup;
+      }
       quality = b->data + offset;
 
       // deal with read groups again
@@ -747,7 +752,11 @@ int main (int argc, char *argv[])
       if (force_rg_index == -1) {
         rg = bam_aux_get(b, "RG");
         if (rg && rg[0] == 'Z') {
-          rgID = (char*)(rg + 1);
+          char *rg_val = (char*)(rg + 1);
+          size_t max_rg_len = (size_t)((b->data + b->l_data) - (uint8_t*)rg_val);
+          if (memchr(rg_val, '\0', max_rg_len)) {
+            rgID = rg_val;
+          }
         }
 
         if (rgID) {

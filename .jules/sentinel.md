@@ -133,3 +133,8 @@
 **Vulnerability:** A runtime crash ("Invalid value for shared scalar") occurred in `lacer.pl` when accessing nested keys of the shared `$VCFPOS` hash if the parent key (chromosome) was missing.
 **Learning:** Perl's autovivification feature automatically creates hash references for missing keys. When a hash is shared using `threads::shared`, this automatic mutation from a worker thread can violate the shared structure's constraints, causing a fatal error.
 **Prevention:** Always use multi-stage defensive checks (e.g., `if (defined $hash->{$key1} && defined $hash->{$key1}->{$key2})`) when reading from shared nested structures to prevent accidental mutation via autovivification.
+
+## 2026-05-31 - Out-of-bounds Read in BAM Auxiliary Tag and Record Parsing
+**Vulnerability:** Out-of-bounds read when parsing BAM auxiliary tags and accessing quality scores in `lacepr.c`.
+**Learning:** `bam_aux_get` returns a pointer to the tag value in the record's data buffer. For 'Z' type tags (strings), standard C string functions like `strcmp` will read past the buffer if the tag is not null-terminated within the record data. Furthermore, calculating offsets for quality data without checking against `b->l_data` can lead to OOB reads if the record is truncated.
+**Prevention:** Always use `memchr` to verify null-termination of string-type auxiliary tags within the bounds of the remaining BAM record data. Validate all derived offsets and lengths against the total record data size (`b->l_data`) before pointer dereferencing or passing to string functions.
