@@ -714,7 +714,8 @@ sub worker {
     }
   };	# sub map_consensus
 
-  $sam->clone;
+  # SECURITY: Properly clone the BAM handle for each thread to prevent race conditions
+  $sam = $sam->clone;
   while ($region = $q->dequeue_nb) {
     last if ($THREADSTATUS[$thread] eq "interrupt");
     print STDERR "$THREADSTATUS[$thread]\n" if $THREADSTATUS[$thread] ne "started";
@@ -1275,8 +1276,10 @@ sub quality_svd {
   my ($matrix, $hist, $bin_size, $last_count, $min_span) = @_;
 
   # some variables
-  my $overall_q = $hist / sum($hist);
   my $total_bases = sum($hist);
+  # SECURITY: Prevent DoS via division by zero if no bases are found
+  if ($total_bases <= 0) { return (null, 0); }
+  my $overall_q = $hist / $total_bases;
   my $tosvd;
   my $center;
   my ($u, $s, $v);
@@ -1312,7 +1315,13 @@ sub quality_svd {
   }
   ($u, $s, $v) = svd($tosvd);
   $u = $u->(,0:($m-1));
-  $fit = $s->at(0)*$s->at(0)/sum($s*$s);
+  my $sum_s2 = sum($s*$s);
+  # SECURITY: Prevent DoS via division by zero during fit calculation
+  if ($sum_s2 > 0) {
+    $fit = $s->at(0)*$s->at(0)/$sum_s2;
+  } else {
+    $fit = 0;
+  }
 
   # try to find the best min and max dim 0 coordinate
   $candidates = $u->(0,)->(0);
@@ -1355,17 +1364,28 @@ sub quality_svd {
   # clip to min and max of candidates for error calculation
   $u0 = $u->(0,)->flat->copy;
   $errorperc = $u0->inplace->clip(min($candidates), max($candidates));
-  $errorperc = ($errorperc - $correct_x) / ($error_x - $correct_x);
+  # SECURITY: Prevent DoS via division by zero during error percentage calculation
+  if (($error_x - $correct_x) != 0) {
+    $errorperc = ($errorperc - $correct_x) / ($error_x - $correct_x);
+  } else {
+    $errorperc = $errorperc * 0;
+  }
   # calculate error bases, take care of last row
   $total_error = sum($errorperc) * $bin_size;
   $last_row = ($matrix->(,-1)->flat - $center) x $v;
-  $last_row /= $s->(0);
+  # SECURITY: Prevent DoS via division by zero on last row calculation
+  if ($s->(0) > 0) {
+    $last_row /= $s->(0);
+  }
   if ($last_row->at(0,0) > max($candidates)) {
     $last_row->(0,0) .= max($candidates);
   } elsif ($last_row->at(0,0) < min($candidates)) {
     $last_row->(0,0) .= min($candidates);
   }
-  $total_error += $last_count * ($last_row->at(0,0) - $correct_x) / ($error_x - $correct_x);
+  # SECURITY: Prevent DoS via division by zero during total error calculation
+  if (($error_x - $correct_x) != 0) {
+    $total_error += $last_count * ($last_row->at(0,0) - $correct_x) / ($error_x - $correct_x);
+  }
 
   # "yates" correction like GATK
   $error *= $total_error;
@@ -1481,7 +1501,22 @@ sub gatk_table0 {
   my $width = 11;
   $width = $max_bases + 2 if $max_bases + 2 > $width;
 
-  push @return, sprintf("%-12s M% 21.0f.0000% 20.4f% 14d% *.2f\n", $rg, -10*log(sum($error)/sum($hist)) / log(10), -10*log(sum($reportederror)/sum($hist)) / log(10), sum($hist), $width, sum($error));
+  my $sum_hist = sum($hist);
+  my $sum_error = sum($error);
+  my $sum_reported = sum($reportederror);
+
+  # SECURITY: Prevent DoS via division by zero or log of zero in GATK table output
+  my $emp_q = 40.0;
+  if ($sum_hist > 0 && $sum_error > 0) {
+    $emp_q = -10*log($sum_error/$sum_hist) / log(10);
+  }
+
+  my $rep_q = 40.0;
+  if ($sum_hist > 0 && $sum_reported > 0) {
+    $rep_q = -10*log($sum_reported/$sum_hist) / log(10);
+  }
+
+  push @return, sprintf("%-12s M% 21.0f.0000% 20.4f% 14d% *.2f\n", $rg, $emp_q, $rep_q, $sum_hist, $width, $sum_error);
 
   return @return;
 }
