@@ -1249,6 +1249,10 @@ sub get_2base {
 
 sub pdlhist {
   my ($q) = @_;
+  # SECURITY: Prevent DoS if input is null or empty
+  if ($q->isnull || $q->nelem == 0) {
+    return zeroes($MAXQUAL - $MINQUAL + 1);
+  }
   # give back quality hist respecting minqual and maxqual
   # assume qualities are in the first column
   my $min = minimum($q);
@@ -1269,7 +1273,9 @@ sub pdlhist {
   } elsif ($MAXQUAL < $maxhist) {
     $hist = $hist->(:($MAXQUAL - $maxhist));
   }
-  return $hist/sum($hist);
+  # SECURITY: Prevent DoS via division-by-zero if sum is zero
+  my $h_sum = sum($hist);
+  return ($h_sum > 0) ? $hist/$h_sum : $hist;
 }
 
 sub quality_svd {
@@ -1403,7 +1409,7 @@ sub quality_svd {
   if (!$gatk) {
     print $out_fh "# Initial matrix size ", $matrix->shape, "\n";
     print $out_fh "# Bin size: $bin_size\n";
-    print $out_fh "# SVD fit: ", $s->at(0) * $s->at(0) / inner($s, $s), "\n";
+    print $out_fh "# SVD fit: $fit\n";
     print $out_fh "# Tolerance: $tolerance\n";
     print $out_fh "# Stdev: $sdev\n";
     print $out_fh "# Candidates: $candidates\n";
@@ -1412,7 +1418,7 @@ sub quality_svd {
     wcols(pdl($MINQUAL..$MAXQUAL), $recalibrated, $hist, $correct, $error, { COLSEP => "\t" });
   }
   
-  return($recalibrated, $s->at(0) * $s->at(0) / inner($s, $s));
+  return($recalibrated, $fit);
 }
 
 sub gatk_header {
