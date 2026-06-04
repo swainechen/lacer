@@ -1413,7 +1413,7 @@ sub quality_svd {
   if (!$gatk) {
     print $out_fh "# Initial matrix size ", $matrix->shape, "\n";
     print $out_fh "# Bin size: $bin_size\n";
-    print $out_fh "# SVD fit: ", $s->at(0) * $s->at(0) / inner($s, $s), "\n";
+    print $out_fh "# SVD fit: $fit\n";
     print $out_fh "# Tolerance: $tolerance\n";
     print $out_fh "# Stdev: $sdev\n";
     print $out_fh "# Candidates: $candidates\n";
@@ -1422,7 +1422,7 @@ sub quality_svd {
     wcols(pdl($MINQUAL..$MAXQUAL), $recalibrated, $hist, $correct, $error, { COLSEP => "\t" });
   }
   
-  return($recalibrated, $s->at(0) * $s->at(0) / inner($s, $s));
+  return($recalibrated, $fit);
 }
 
 sub gatk_header {
