@@ -1249,10 +1249,12 @@ sub get_2base {
 
 sub pdlhist {
   my ($q) = @_;
-  # SECURITY: Prevent DoS if input is null or empty
+
+  # SECURITY: Prevent DoS via division by zero or empty input
   if ($q->isnull || $q->nelem == 0) {
     return zeroes($MAXQUAL - $MINQUAL + 1);
   }
+
   # give back quality hist respecting minqual and maxqual
   # assume qualities are in the first column
   my $min = minimum($q);
@@ -1273,9 +1275,12 @@ sub pdlhist {
   } elsif ($MAXQUAL < $maxhist) {
     $hist = $hist->(:($MAXQUAL - $maxhist));
   }
-  # SECURITY: Prevent DoS via division-by-zero if sum is zero
-  my $h_sum = sum($hist);
-  return ($h_sum > 0) ? $hist/$h_sum : $hist;
+  my $s = sum($hist);
+  if ($s > 0) {
+    return $hist/$s;
+  } else {
+    return zeroes($MAXQUAL - $MINQUAL + 1);
+  }
 }
 
 sub quality_svd {
