@@ -1414,7 +1414,7 @@ sub quality_svd {
   if (!$gatk) {
     print $out_fh "# Initial matrix size ", $matrix->shape, "\n";
     print $out_fh "# Bin size: $bin_size\n";
-    print $out_fh "# SVD fit: ", $fit, "\n";
+    print $out_fh "# SVD fit: $fit\n";
     print $out_fh "# Tolerance: $tolerance\n";
     print $out_fh "# Stdev: $sdev\n";
     print $out_fh "# Candidates: $candidates\n";
