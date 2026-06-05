@@ -143,3 +143,8 @@
 **Vulnerability:** Race conditions on shared global variables `$MAXQUAL`, `$MINQUAL`, and `@THREADSTATUS` in `lacer.pl`.
 **Learning:** In Perl `threads::shared`, simple scalar and array updates are not atomic. Multiple threads updating `$MAXQUAL` or `$MINQUAL` simultaneously could lead to inconsistent bounds, affecting downstream matrix calculations. Similarly, modifying the `@THREADSTATUS` array from a signal handler (`quit_pileups`) without locking could cause data corruption or race conditions with worker threads.
 **Prevention:** Always use `lock()` before modifying shared variables in Perl. For performance-sensitive updates like quality bounds, use a double-checked locking pattern (check condition, lock, check again, update) to minimize contention while ensuring atomicity.
+
+## 2026-06-02 - DoS via Uninitialized Hash Reference in Global Scope
+**Vulnerability:** A Denial of Service (DoS) vulnerability (runtime crash) existed in `lacer.pl` when the `-noreadgroups` flag was used. The `$rginfo` hash reference was only initialized inside an `if ($USE_READGROUPS)` block, leading to a fatal "Can't use an undefined value as a HASH reference" error during GATK table generation.
+**Learning:** Conditional initialization of global data structures based on command-line flags is dangerous if downstream logic assumes those structures are always defined. Even if read group processing is skipped, the final reporting phase still dereferences the structure to obtain metadata for the "NULL" group.
+**Prevention:** Ensure all primary data structures are initialized with safe default values (e.g., a "NULL" entry) in the global scope or immediately after command-line parsing, independent of conditional logic blocks.

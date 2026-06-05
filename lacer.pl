@@ -475,11 +475,11 @@ if ($USE_READGROUPS) {
       }
     }
   }
-  if (!defined $rginfo) {
-    @RG_LIST = ("NULL");
-    foreach $j (qw(ID PL PU LB SM)) {
-      $rginfo->{"NULL"}->{$j} = "NULL";
-    }
+}
+if (!defined $rginfo) {
+  @RG_LIST = ("NULL");
+  foreach $j (qw(ID PL PU LB SM)) {
+    $rginfo->{"NULL"}->{$j} = "NULL";
   }
 }
 if (!scalar @RG_LIST) {
