@@ -138,3 +138,8 @@
 **Vulnerability:** Out-of-bounds read when parsing BAM auxiliary tags and accessing quality scores in `lacepr.c`.
 **Learning:** `bam_aux_get` returns a pointer to the tag value in the record's data buffer. For 'Z' type tags (strings), standard C string functions like `strcmp` will read past the buffer if the tag is not null-terminated within the record data. Furthermore, calculating offsets for quality data without checking against `b->l_data` can lead to OOB reads if the record is truncated.
 **Prevention:** Always use `memchr` to verify null-termination of string-type auxiliary tags within the bounds of the remaining BAM record data. Validate all derived offsets and lengths against the total record data size (`b->l_data`) before pointer dereferencing or passing to string functions.
+
+## 2026-06-01 - Race Conditions on Shared Globals and Signal Handlers
+**Vulnerability:** Race conditions on shared global variables `$MAXQUAL`, `$MINQUAL`, and `@THREADSTATUS` in `lacer.pl`.
+**Learning:** In Perl `threads::shared`, simple scalar and array updates are not atomic. Multiple threads updating `$MAXQUAL` or `$MINQUAL` simultaneously could lead to inconsistent bounds, affecting downstream matrix calculations. Similarly, modifying the `@THREADSTATUS` array from a signal handler (`quit_pileups`) without locking could cause data corruption or race conditions with worker threads.
+**Prevention:** Always use `lock()` before modifying shared variables in Perl. For performance-sensitive updates like quality bounds, use a double-checked locking pattern (check condition, lock, check again, update) to minimize contention while ensuring atomicity.

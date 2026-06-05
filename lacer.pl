@@ -619,14 +619,18 @@ sub worker {
       $temppos = -$temppos if $aln->get_tag_values("SECOND_MATE");
       $temphist->{$rg[$i]}->{$temppos}->[$tempq]++;	# position specific
       $temphist->{$rg[$i]}->{$context[$i]}->[$tempq]++;
-      if (!$MAXQUAL) {
-        $MAXQUAL = $tempq;
+      # SECURITY: Prevent race condition on global shared quality bounds
+      if (!$MAXQUAL || $tempq > $MAXQUAL || !$MINQUAL || $tempq < $MINQUAL) {
+        lock($MAXQUAL);
+        if (!$MAXQUAL) {
+          $MAXQUAL = $tempq;
+        }
+        if (!$MINQUAL) {
+          $MINQUAL = $tempq;
+        }
+        if ($tempq > $MAXQUAL) { $MAXQUAL = $tempq; }
+        if ($tempq < $MINQUAL) { $MINQUAL = $tempq; }
       }
-      if (!$MINQUAL) {
-        $MINQUAL = $tempq;
-      }
-      if ($tempq > $MAXQUAL) { $MAXQUAL = $tempq; }
-      if ($tempq < $MINQUAL) { $MINQUAL = $tempq; }
       $base->{$nt[$i]}++;
     }
     # if we're high coverage, we still need the histograms, but don't use these
@@ -1665,6 +1669,7 @@ sub sigint_handler {
 
 sub quit_pileups {
   my $i;
+  lock(@THREADSTATUS);
   foreach $i (1..$#THREADSTATUS) {
     $THREADSTATUS[$i] = "interrupt" if $THREADSTATUS[$i] eq "started";
   }
