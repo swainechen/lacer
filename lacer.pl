@@ -591,7 +591,7 @@ sub worker {
         next;
       }
       $tempq = unpack("x". ($p->qpos) . "C", $q_scores);
-      next if $tempq < $MINQ;
+      next if $tempq < $MINQ || $tempq > 93;
       $cov++;
       if ($USE_READGROUPS) {
         $rg[$i] = $aln->aux;
@@ -720,6 +720,7 @@ sub worker {
 
   # SECURITY: Properly clone the BAM handle for each thread to prevent race conditions
   $sam = $sam->clone;
+  die "Error: Failed to clone Bio::DB::Sam object in worker thread $thread.\n" if !defined $sam;
   while ($region = $q->dequeue_nb) {
     last if ($THREADSTATUS[$thread] eq "interrupt");
     print STDERR "$THREADSTATUS[$thread]\n" if $THREADSTATUS[$thread] ne "started";
