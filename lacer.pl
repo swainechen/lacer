@@ -586,7 +586,7 @@ sub worker {
       next if !$aln->qual || $aln->qual < $MINMAPQ;
       my $q_scores = $aln->_qscore;
       # SECURITY: Validate offset and length before unpack to prevent fatal error (DoS)
-      if (!defined $q_scores || length($q_scores) <= $p->qpos) {
+      if (!defined $q_scores || $p->qpos < 0 || length($q_scores) <= $p->qpos) {
         warn "Warning: Invalid quality scores for alignment at $seqid:$pos. Skipping.\n";
         next;
       }
