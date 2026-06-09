@@ -148,3 +148,8 @@
 **Vulnerability:** A Denial of Service (DoS) vulnerability (runtime crash) existed in `lacer.pl` when the `-noreadgroups` flag was used. The `$rginfo` hash reference was only initialized inside an `if ($USE_READGROUPS)` block, leading to a fatal "Can't use an undefined value as a HASH reference" error during GATK table generation.
 **Learning:** Conditional initialization of global data structures based on command-line flags is dangerous if downstream logic assumes those structures are always defined. Even if read group processing is skipped, the final reporting phase still dereferences the structure to obtain metadata for the "NULL" group.
 **Prevention:** Ensure all primary data structures are initialized with safe default values (e.g., a "NULL" entry) in the global scope or immediately after command-line parsing, independent of conditional logic blocks.
+
+## 2024-06-05 - Memory Exhaustion DoS via Arbitrary Read Group Tags
+**Vulnerability:** Denial of Service (DoS) via memory exhaustion by injecting millions of unique or excessively long Read Group (RG) tags into BAM alignment records.
+**Learning:** Even if the number of entries in a file header is limited, the content of individual records (like RG tags in BAM alignments) can still be used to inject arbitrary keys into internal hashes. If these hashes are shared across threads, memory growth can be rapid and fatal.
+**Prevention:** Always truncate string-based identifiers used as hash keys and validate them against a known whitelist (e.g., the set of Read Groups declared in the header) before processing the record.

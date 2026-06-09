@@ -455,7 +455,7 @@ if ($USE_READGROUPS) {
   foreach $i (@f) {
     if ($i =~ /^\@RG/) {
       if ($i =~ /ID:(\S+)/) {
-        $rg = $1;
+        $rg = substr($1, 0, 255);
       } else {
         $rg = "NULL";
       }
@@ -468,7 +468,7 @@ if ($USE_READGROUPS) {
       push(@RG_LIST, $rg);
       foreach $j (qw(ID PL PU LB SM)) {
         if ($i =~ /$j:(\S+)/) {
-          $rginfo->{$rg}->{$j} = $1;
+          $rginfo->{$rg}->{$j} = substr($1, 0, 255);
         } else {
           $rginfo->{$rg}->{$j} = "NULL";
         }
@@ -534,6 +534,7 @@ sub worker {
   my $first;
   my $last;
   my $alldata = {};
+  my %VALID_RG = map { $_ => 1 } @RG_LIST;
   foreach $rg (@RG_LIST) {
     $alldata->{$rg} = retrieve_pdls($prefix . $rg);
   }
@@ -596,12 +597,17 @@ sub worker {
       if ($USE_READGROUPS) {
         $rg[$i] = $aln->aux;
         if ($rg[$i] =~ /RG:Z:(\S+)/) {
-          $rg[$i] = $1;
+          $rg[$i] = substr($1, 0, 255);
         } else {
           $rg[$i] = "NULL";
         }
       } else {
         $rg[$i] = "NULL";
+      }
+      # SECURITY: Validate Read Group to prevent memory exhaustion DoS via arbitrary keys in shared hashes.
+      if (!exists $VALID_RG{$rg[$i]}) {
+        warn "Warning: Read Group '$rg[$i]' not found in BAM header. Skipping alignment at $seqid:$pos.\n";
+        next;
       }
       $temphist->{$rg[$i]}->{0}->[$tempq]++;	# overall histogram
       if ($aln->strand > 0) {
