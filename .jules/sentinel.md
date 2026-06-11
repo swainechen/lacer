@@ -153,3 +153,8 @@
 **Vulnerability:** Denial of Service (DoS) via memory exhaustion by injecting millions of unique or excessively long Read Group (RG) tags into BAM alignment records.
 **Learning:** Even if the number of entries in a file header is limited, the content of individual records (like RG tags in BAM alignments) can still be used to inject arbitrary keys into internal hashes. If these hashes are shared across threads, memory growth can be rapid and fatal.
 **Prevention:** Always truncate string-based identifiers used as hash keys and validate them against a known whitelist (e.g., the set of Read Groups declared in the header) before processing the record.
+
+## 2026-06-10 - Memory Exhaustion DoS via Unbounded Read Position Covariates
+**Vulnerability:** Denial of Service (DoS) via memory exhaustion in `lacer.pl` by providing BAM records with extremely large read positions or long reads.
+**Learning:** Read positions were used as keys in shared hashes (`$temphist`) without validation or capping. Malformed or extreme data can cause these hashes to grow unbounded, exhausting system memory.
+**Prevention:** Always clamp continuous covariates (like read positions) to a reasonable range (e.g., [-1024, 1024]) before using them as keys in hashes. This limits the memory footprint and ensures compatibility with downstream components.

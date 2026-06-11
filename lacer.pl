@@ -541,6 +541,7 @@ sub worker {
   my $map_consensus = sub {
     my ($seqid, $pos, $pileup, $sam) = @_;
     my @a;
+    my @pos;
     my $aln;
     my @nt;
     my @rg;
@@ -623,6 +624,11 @@ sub worker {
         ($context[$i], $nt[$i]) = get_2base($aln->qseq, $p->qpos, -1);
       }
       $temppos = -$temppos if $aln->get_tag_values("SECOND_MATE");
+      # SECURITY: Clamp read position to [-1024, 1024] to prevent DoS via memory
+      # exhaustion in shared hashes and maintain compatibility with lacepr's MAX_CYCLE.
+      $temppos = 1024 if $temppos > 1024;
+      $temppos = -1024 if $temppos < -1024;
+      $pos[$i] = $temppos;
       $temphist->{$rg[$i]}->{$temppos}->[$tempq]++;	# position specific
       $temphist->{$rg[$i]}->{$context[$i]}->[$tempq]++;
       # SECURITY: Prevent race condition on global shared quality bounds
@@ -704,13 +710,7 @@ sub worker {
         # Coverage at this coordinate
         push @data, $cov;
         # Position - in read
-        if ($aln->strand > 0) {
-          $temppos = $p->qpos+1;
-        } else {
-          $temppos = $aln->l_qseq - $p->qpos;
-        }
-        $temppos = -$temppos if $aln->get_tag_values("SECOND_MATE");
-        push @data, $temppos;
+        push @data, $pos[$i];
         # context - encoded as integer
         push @data, $context_code{$context[$i]};
         if ($DUMP) {
