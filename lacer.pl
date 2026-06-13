@@ -1021,7 +1021,8 @@ foreach $rg (keys %$alldata) {
       ref($recalibrated->{$rg}) eq "PDL" && 
       ref($svd_hist->{$rg}) eq "PDL") {
     push @table, $rg;
-    $max_bases = sum($svd_hist->{$rg}) if sum($svd_hist->{$rg}) > $max_bases;
+    my $rg_sum = sum($svd_hist->{$rg})->at(0);
+    $max_bases = $rg_sum if $rg_sum > $max_bases;
     if ($verbose == 3) {
       print STDERR "Read group $rg recalibrated on ", $alldata->{$rg}->getdim(1), " nonconsensus and matched consensus bases out of ", sum($svd_hist->{$rg}), " total bases.\n";
     }
@@ -1284,8 +1285,7 @@ sub pdlhist {
   } elsif ($MAXQUAL < $maxhist) {
     $hist = $hist->(:($MAXQUAL - $maxhist));
   }
-  # SECURITY: Prevent DoS via division by zero during normalization
-  my $sum = sum($hist);
+  my $sum = sum($hist)->at(0);
   if ($sum > 0) {
     return $hist / $sum;
   } else {
@@ -1296,9 +1296,8 @@ sub pdlhist {
 sub quality_svd {
   my ($matrix, $hist, $bin_size, $last_count, $min_span) = @_;
 
-  # some variables
-  my $total_bases = sum($hist);
-  # SECURITY: Prevent DoS via division by zero if no bases are found
+  # Initialize variables and validate data
+  my $total_bases = sum($hist)->at(0);
   if ($total_bases <= 0) { return (null, 0); }
   my $overall_q = $hist / $total_bases;
   my $tosvd;
@@ -1336,8 +1335,7 @@ sub quality_svd {
   }
   ($u, $s, $v) = svd($tosvd);
   $u = $u->(,0:($m-1));
-  my $sum_s2 = sum($s*$s);
-  # SECURITY: Prevent DoS via division by zero during fit calculation
+  my $sum_s2 = sum($s*$s)->at(0);
   if ($sum_s2 > 0) {
     $fit = $s->at(0)*$s->at(0)/$sum_s2;
   } else {
@@ -1348,9 +1346,13 @@ sub quality_svd {
   $candidates = $u->(0,)->(0);
   $tolerance = 0;
   $sdev = sqrt(inner($u->(0,)->flat,$u->(0,)->flat)/$u->getdim(1));
+  # try to find the best min and max dim 0 coordinate
+  my $u0_row = $u->(0,);
+  my $u0_max = max($u0_row)->at(0);
+  my $u0_min = min($u0_row)->at(0);
   while ($tolerance <= 2 &&
          ($candidates->getdim(0) < 2 ||
-          max($candidates) - min($candidates) < $min_span * (max($u->(0,)) - min($u->(0,)))
+          (max($candidates)->at(0) - min($candidates)->at(0)) < $min_span * ($u0_max - $u0_min)
         )) {
     $tolerance += 0.1;
     $c1 = which(abs($u->(1,)) < $tolerance * $sdev);
@@ -1385,17 +1387,16 @@ sub quality_svd {
   # clip to min and max of candidates for error calculation
   $u0 = $u->(0,)->flat->copy;
   $errorperc = $u0->inplace->clip(min($candidates), max($candidates));
-  # SECURITY: Prevent DoS via division by zero during error percentage calculation
-  if (($error_x - $correct_x) != 0) {
+  # Defensive check to prevent division by zero during error percentage calculation
+  if (($error_x - $correct_x)->at(0) != 0) {
     $errorperc = ($errorperc - $correct_x) / ($error_x - $correct_x);
   } else {
     $errorperc = $errorperc * 0;
   }
   # calculate error bases, take care of last row
-  $total_error = sum($errorperc) * $bin_size;
+  $total_error = sum($errorperc)->at(0) * $bin_size;
   $last_row = ($matrix->(,-1)->flat - $center) x $v;
-  # SECURITY: Prevent DoS via division by zero on last row calculation
-  if ($s->(0) > 0) {
+  if ($s->at(0) > 0) {
     $last_row /= $s->(0);
   }
   if ($last_row->at(0,0) > max($candidates)) {
@@ -1403,8 +1404,8 @@ sub quality_svd {
   } elsif ($last_row->at(0,0) < min($candidates)) {
     $last_row->(0,0) .= min($candidates);
   }
-  # SECURITY: Prevent DoS via division by zero during total error calculation
-  if (($error_x - $correct_x) != 0) {
+  # Defensive check to prevent division by zero during total error calculation
+  if (($error_x - $correct_x)->at(0) != 0) {
     $total_error += $last_count * ($last_row->at(0,0) - $correct_x) / ($error_x - $correct_x);
   }
 
@@ -1428,7 +1429,7 @@ sub quality_svd {
     print $out_fh "# Tolerance: $tolerance\n";
     print $out_fh "# Stdev: $sdev\n";
     print $out_fh "# Candidates: $candidates\n";
-    print $out_fh "# U1 range: ", (max($u->(0,)) - min($u->(0,))), "\n";
+    print $out_fh "# U1 range: ", ($u0_max - $u0_min), "\n";
     print $out_fh join ("\t", "# Original", "Recalibrated", "Histogram", "Correct", "Error"), "\n";
     wcols(pdl($MINQUAL..$MAXQUAL), $recalibrated, $hist, $correct, $error, { COLSEP => "\t" });
   }
@@ -1496,7 +1497,7 @@ solid_recal_mode            SET_Q_ZERO
   my $sum = 0;
   my $rg;
   foreach $rg (keys %$hist) {
-    $sum += sum($hist->{$rg});
+    $sum += sum($hist->{$rg})->at(0);
   }
   my $width = 11;
   $width = $max_bases + 2 if $max_bases + 2 > $width;
@@ -1522,11 +1523,11 @@ sub gatk_table0 {
   my $width = 11;
   $width = $max_bases + 2 if $max_bases + 2 > $width;
 
-  my $sum_hist = sum($hist);
-  my $sum_error = sum($error);
-  my $sum_reported = sum($reportederror);
+  my $sum_hist = sum($hist)->at(0);
+  my $sum_error = sum($error)->at(0);
+  my $sum_reported = sum($reportederror)->at(0);
 
-  # SECURITY: Prevent DoS via division by zero or log of zero in GATK table output
+  # Validate sums to prevent division by zero or log of zero in GATK table output
   my $emp_q = 40.0;
   if ($sum_hist > 0 && $sum_error > 0) {
     $emp_q = -10*log($sum_error/$sum_hist) / log(10);
@@ -1604,7 +1605,7 @@ sub make_matrix {
   my $jend;
   my $last_count;
   my $max_cov;
-  $max_cov = max($data->(3,));
+  $max_cov = max($data->(3,))->at(0);
   $scale = length($max_cov);
   $score = ($max_cov-$data->(2,)) * 10**($scale+2) +	# vote (low then high)
            (1-$data->(1,)) * 10**($scale+1) +	# consensus (0 then 1)
