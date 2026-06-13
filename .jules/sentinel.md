@@ -158,3 +158,8 @@
 **Vulnerability:** Denial of Service (DoS) via memory exhaustion in `lacer.pl` by providing BAM records with extremely large read positions or long reads.
 **Learning:** Read positions were used as keys in shared hashes (`$temphist`) without validation or capping. Malformed or extreme data can cause these hashes to grow unbounded, exhausting system memory.
 **Prevention:** Always clamp continuous covariates (like read positions) to a reasonable range (e.g., [-1024, 1024]) before using them as keys in hashes. This limits the memory footprint and ensures compatibility with downstream components.
+
+## 2026-06-11 - DoS via log10(0) Fatal Error in PDL
+**Vulnerability:** A Denial of Service (DoS) vulnerability (runtime crash) in `lacer.pl` due to an unguarded `log10` call on a PDL object.
+**Learning:** In Perl, specifically when using the PDL library, taking the logarithm of a piddle containing zero values (e.g., `log10(pdl(0))`) results in a fatal "Can't take log of 0" error that immediately terminates the script. This can occur in the SVD-based recalibration logic if the calculated error estimate is zero or underflows due to specific alignment data distributions.
+**Prevention:** Always implement numerical stability guards by clipping PDL objects to a safe minimum positive value (e.g., `$pdl->inplace->clip(1e-10, undef)`) before performing logarithmic or division operations that could otherwise trigger fatal runtime errors or undefined behavior.

@@ -1421,7 +1421,10 @@ sub quality_svd {
   $overall_q /= sum($overall_q);
 
   # the recalibration
-  $recalibrated = -10 * log10($total_error/$total_bases * $error / $overall_q);
+  # SECURITY: Guard against log(0) which causes a fatal error in Perl/PDL
+  my $log_arg = ($total_error/$total_bases * $error / $overall_q);
+  $log_arg->inplace->clip(1e-10, undef);
+  $recalibrated = -10 * log10($log_arg);
   if (!$gatk) {
     print $out_fh "# Initial matrix size ", $matrix->shape, "\n";
     print $out_fh "# Bin size: $bin_size\n";
