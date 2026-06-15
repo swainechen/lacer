@@ -345,10 +345,13 @@ if (length $region && -f $region) {
   open(my $reg_fh, '<', $region) or die "Cannot open region file $region: $!";
   while ($j = <$reg_fh>) {
     next if $j =~ /^#/;
-    next if $j =~ /^$/;
-    chomp $j;
-    ($chrom, $start, $end) = split /\s+/, $j;
+    $j =~ s/^\s+|\s+$//g;
+    next if $j eq "";
+    # SECURITY: Limit split to 4 columns and truncate chromosome name to prevent memory bloat/DoS
+    ($chrom, $start, $end) = split /\s+/, $j, 4;
     next if !defined $chrom || !defined $start || !defined $end;
+    $chrom = substr($chrom, 0, 255);
+
     if (!looks_like_number($start) || !looks_like_number($end)) {
       warn "Warning: Non-numeric coordinates in region file: $j\n";
       next;
@@ -498,16 +501,25 @@ foreach $rg (@RG_LIST) {
 #
 if (-f $vcf) {
   open(my $v_fh, '<', $vcf) or die "Cannot open VCF file $vcf: $!";
+  my $vcf_count = 0;
   while (<$v_fh>) {
     next if /^#/;
     chomp;
-    @f = split /\t/, $_;
+    # SECURITY: Limit split to 3 columns and truncate contig name to prevent memory bloat/DoS
+    @f = split /\t/, $_, 3;
     next if !defined $f[0] || !defined $f[1] || !looks_like_number($f[1]);
-    if (!defined $VCFPOS->{$f[0]}) {
+    my $v_chrom = substr($f[0], 0, 255);
+    if (!defined $VCFPOS->{$v_chrom}) {
       my %anon :shared;
-      $VCFPOS->{$f[0]} = \%anon;
+      $VCFPOS->{$v_chrom} = \%anon;
     }
-    $VCFPOS->{$f[0]}->{$f[1]} = 1;
+    if (!defined $VCFPOS->{$v_chrom}->{$f[1]}) {
+      # SECURITY: Limit total VCF entries to 10M to prevent DoS via memory exhaustion
+      if (++$vcf_count > 10_000_000) {
+        die "Error: Too many VCF entries (> 10,000,000). This may be a DoS attempt or malformed file.\n";
+      }
+      $VCFPOS->{$v_chrom}->{$f[1]} = 1;
+    }
   }
   close $v_fh;
 }
