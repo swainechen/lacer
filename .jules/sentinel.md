@@ -162,4 +162,9 @@
 ## 2026-06-11 - DoS via log10(0) Fatal Error in PDL
 **Vulnerability:** A Denial of Service (DoS) vulnerability (runtime crash) in `lacer.pl` due to an unguarded `log10` call on a PDL object.
 **Learning:** In Perl, specifically when using the PDL library, taking the logarithm of a piddle containing zero values (e.g., `log10(pdl(0))`) results in a fatal "Can't take log of 0" error that immediately terminates the script. This can occur in the SVD-based recalibration logic if the calculated error estimate is zero or underflows due to specific alignment data distributions.
-**Prevention:** Always implement numerical stability guards by clipping PDL objects to a safe minimum positive value (e.g., `$pdl->inplace->clip(1e-10, undef)`) before performing logarithmic or division operations that could otherwise trigger fatal runtime errors or undefined behavior.
+**Prevention:** Always implement numerical stability guards by clipping PDL objects to a safe minimum positive value (e.g., `$pdl->inplace->clip(1e-10, undef)`) before performing logarithmic or division operations that could otherwise trigger fatal runtime errors or underlying behavior.
+
+## 2026-06-12 - Security Guard Bypass in Multi-Pass Pileup Processing
+**Vulnerability:** In `lacer.pl`, the two-pass pileup processing was vulnerable to a security bypass. The first pass updated state arrays (like `@a` and `@rg`) and the coverage counter (`$cov`) before completing all validations (such as Read Group whitelisting). This allowed unvalidated or malicious records to be partially registered, potentially affecting consensus calling or causing downstream errors in the second pass.
+**Learning:** Logic that depends on multi-stage processing must ensure that state updates are deferred until all security and quality validations for a record are passed. Partial state updates can lead to "ghost" records that bypass later checks.
+**Prevention:** Use local variables for temporary record processing and only "commit" the results to shared state arrays and counters after all validations (Mapping Quality, Base Quality, and Whitelists) have successfully completed.

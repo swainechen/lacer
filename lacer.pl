@@ -595,10 +595,9 @@ sub worker {
       # if we don't want this read then don't look at it again
       next if ($p->is_refskip || $p->indel);
 
-      $a[$i] = $p->alignment;
-      $aln = $a[$i];
-      next if !$aln->qual || $aln->qual < $MINMAPQ;
-      my $q_scores = $aln->_qscore;
+      my $this_aln = $p->alignment;
+      next if !$this_aln->qual || $this_aln->qual < $MINMAPQ;
+      my $q_scores = $this_aln->_qscore;
       # SECURITY: Validate offset and length before unpack to prevent fatal error (DoS)
       if (!defined $q_scores || $p->qpos < 0 || length($q_scores) <= $p->qpos) {
         warn "Warning: Invalid quality scores for alignment at $seqid:$pos. Skipping.\n";
@@ -606,42 +605,53 @@ sub worker {
       }
       $tempq = unpack("x". ($p->qpos) . "C", $q_scores);
       next if $tempq < $MINQ || $tempq > 93;
-      $cov++;
+
+      my $this_rg;
       if ($USE_READGROUPS) {
-        $rg[$i] = $aln->aux;
-        if ($rg[$i] =~ /RG:Z:(\S+)/) {
-          $rg[$i] = substr($1, 0, 255);
+        $this_rg = $this_aln->aux;
+        if ($this_rg =~ /RG:Z:(\S+)/) {
+          $this_rg = substr($1, 0, 255);
         } else {
-          $rg[$i] = "NULL";
+          $this_rg = "NULL";
         }
       } else {
-        $rg[$i] = "NULL";
+        $this_rg = "NULL";
       }
       # SECURITY: Validate Read Group to prevent memory exhaustion DoS via arbitrary keys in shared hashes.
-      if (!exists $VALID_RG{$rg[$i]}) {
-        warn "Warning: Read Group '$rg[$i]' not found in BAM header. Skipping alignment at $seqid:$pos.\n";
+      if (!exists $VALID_RG{$this_rg}) {
+        warn "Warning: Read Group '$this_rg' not found in BAM header. Skipping alignment at $seqid:$pos.\n";
         next;
       }
-      $temphist->{$rg[$i]}->{0}->[$tempq]++;	# overall histogram
-      if ($aln->strand > 0) {
+
+      my ($this_context, $this_nt, $this_temppos);
+      if ($this_aln->strand > 0) {
         # note qpos returns 0-based coordinate
         # context should be reverse complemented already if negative strand
         # base returned should be positive strand regardless - to compare with ref
-        $temppos = $p->qpos+1;
-#        ($context[$i], $nt[$i]) = get_context($aln->qseq, $p->qpos, 1);
-        ($context[$i], $nt[$i]) = get_2base($aln->qseq, $p->qpos, 1);
+        $this_temppos = $p->qpos+1;
+#        ($this_context, $this_nt) = get_context($this_aln->qseq, $p->qpos, 1);
+        ($this_context, $this_nt) = get_2base($this_aln->qseq, $p->qpos, 1);
       } else {
-        $temppos = $aln->l_qseq - $p->qpos;
-#        ($context[$i], $nt[$i]) = get_context($aln->qseq, $p->qpos, -1);
-        ($context[$i], $nt[$i]) = get_2base($aln->qseq, $p->qpos, -1);
+        $this_temppos = $this_aln->l_qseq - $p->qpos;
+#        ($this_context, $this_nt) = get_context($this_aln->qseq, $p->qpos, -1);
+        ($this_context, $this_nt) = get_2base($this_aln->qseq, $p->qpos, -1);
       }
-      $temppos = -$temppos if $aln->get_tag_values("SECOND_MATE");
+      $this_temppos = -$this_temppos if $this_aln->get_tag_values("SECOND_MATE");
       # SECURITY: Clamp read position to [-1024, 1024] to prevent DoS via memory
       # exhaustion in shared hashes and maintain compatibility with lacepr's MAX_CYCLE.
-      $temppos = 1024 if $temppos > 1024;
-      $temppos = -1024 if $temppos < -1024;
-      $pos[$i] = $temppos;
-      $temphist->{$rg[$i]}->{$temppos}->[$tempq]++;	# position specific
+      $this_temppos = 1024 if $this_temppos > 1024;
+      $this_temppos = -1024 if $this_temppos < -1024;
+
+      # Now that all validations have passed, update state
+      $a[$i] = $this_aln;
+      $rg[$i] = $this_rg;
+      $pos[$i] = $this_temppos;
+      $context[$i] = $this_context;
+      $nt[$i] = $this_nt;
+      $cov++;
+
+      $temphist->{$rg[$i]}->{0}->[$tempq]++;	# overall histogram
+      $temphist->{$rg[$i]}->{$pos[$i]}->[$tempq]++;	# position specific
       $temphist->{$rg[$i]}->{$context[$i]}->[$tempq]++;
       # SECURITY: Prevent race condition on global shared quality bounds
       if (!$MAXQUAL || $tempq > $MAXQUAL || !$MINQUAL || $tempq < $MINQUAL) {
