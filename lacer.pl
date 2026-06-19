@@ -548,7 +548,11 @@ sub worker {
   my $alldata = {};
   my %VALID_RG = map { $_ => 1 } @RG_LIST;
   foreach $rg (@RG_LIST) {
-    $alldata->{$rg} = retrieve_pdls($prefix . $rg);
+    # Initialize aggregator to null to facilitate robust isnull checks;
+    # retrieve_pdls is called to maintain library-expected state but its
+    # placeholder zeroes(6,1) is ignored to avoid quality 0 logic bypass.
+    $alldata->{$rg} = null;
+    retrieve_pdls($prefix . $rg);
   }
   my $map_consensus = sub {
     my ($seqid, $pos, $pileup, $sam) = @_;
@@ -774,7 +778,7 @@ if ($thread_debug) { print STDERR "Return from pileup for $region, thread $threa
         }
         next;
       }
-      if ($alldata->{$rg}->at(0,0) == 0) {
+      if ($alldata->{$rg}->isnull) {
         $alldata->{$rg} = $tempdata->{$rg}->copy;
       } else {
         $alldata->{$rg} = $alldata->{$rg}->glue(1, $tempdata->{$rg});
@@ -860,7 +864,7 @@ while ($waiting) {
     if ($THREADSTATUS[$i] eq "data") {
       foreach $rg (@RG_LIST) {
         $temppdl = retrieve_pdls($i . "final" . $rg);
-        if ($temppdl->at(0,0) > 0) {
+        if (!$temppdl->isnull) {
           $alldata->{$rg} = $alldata->{$rg}->glue(1, $temppdl);
           $alldata->{$rg}->sever;
         }
@@ -969,8 +973,7 @@ my $pca1;
 foreach $rg (keys %$alldata) {
   # sanity check to make sure we have data
   if (ref($alldata->{$rg}) ne "PDL" ||
-      $alldata->{$rg}->isnull ||
-      $alldata->{$rg}->at(0,0) == 0) {
+      $alldata->{$rg}->isnull) {
     print STDERR "Uh oh, seem to have no data for read group $rg\n";
     next;
   }
