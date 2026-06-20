@@ -1688,7 +1688,14 @@ sub add_hist {
 sub to_int {
   my (@a) = @_;
   foreach my $i (0..$#a) {
-    $a[$i] += 0;
+    # SECURITY: Ensure all elements are defined and numeric to prevent
+    # "uninitialized value" warnings and maintain stability in downstream
+    # PDL matrix operations.
+    if (!defined $a[$i]) {
+      $a[$i] = 0;
+    } else {
+      $a[$i] += 0;
+    }
   }
   return @a;
 }
