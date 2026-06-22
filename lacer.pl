@@ -983,7 +983,9 @@ foreach $rg (keys %$alldata) {
   # enough data to recalibrate
 # $svd_hist->{$rg} = long(@{$ALLHIST->{$rg}->{0}}[$MINQUAL..$MAXQUAL]);
 # getting some odd type problem converting to pdl - so make the whole array int?
-  $svd_hist->{$rg} = pdl(to_int(@{$ALLHIST->{$rg}->{0}}[$MINQUAL..$MAXQUAL]));
+  # SECURITY: Use exists checks on shared hash to prevent fatal autovivification (DoS)
+  my $hist_ref = (exists $ALLHIST->{$rg} && exists $ALLHIST->{$rg}->{0}) ? $ALLHIST->{$rg}->{0} : [];
+  $svd_hist->{$rg} = pdl(to_int(@{$hist_ref}[$MINQUAL..$MAXQUAL]));
   if ($verbose == 3) {
     $mu->record("After generating matrix");
     print STDOUT "# Initial base data size for read group $rg: ", $alldata->{$rg}->shape, "\n";
@@ -1006,7 +1008,9 @@ foreach $rg (keys %$alldata) {
         if (!$gatk) {
           print $out_fh "# Covariate: $code_context{$covariate} ($covariate)\n";
         }
-        $covariate_hist->{$rg}->{$code_context{$covariate}} = pdl(to_int(@{$ALLHIST->{$rg}->{$code_context{$covariate}}}[$MINQUAL..$MAXQUAL]));
+        # SECURITY: Use exists checks on shared hash to prevent fatal autovivification (DoS)
+        my $ctx_ref = (exists $ALLHIST->{$rg} && exists $ALLHIST->{$rg}->{$code_context{$covariate}}) ? $ALLHIST->{$rg}->{$code_context{$covariate}} : [];
+        $covariate_hist->{$rg}->{$code_context{$covariate}} = pdl(to_int(@{$ctx_ref}[$MINQUAL..$MAXQUAL]));
         ($covariate_recalibrated->{$rg}->{$code_context{$covariate}}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$code_context{$covariate}}, $covariate_binsize, $last_count, $min_span);
         if ($verbose >= 2) {
           print STDOUT "# SVD fit $code_context{$covariate} ($covariate): $pca1\n";
@@ -1023,7 +1027,9 @@ foreach $rg (keys %$alldata) {
         if (!$gatk) {
           print $out_fh "# Covariate: $covariate\n";
         }
-        $covariate_hist->{$rg}->{$covariate} = pdl(to_int(@{$ALLHIST->{$rg}->{$covariate}}[$MINQUAL..$MAXQUAL]));
+        # SECURITY: Use exists checks on shared hash to prevent fatal autovivification (DoS)
+        my $cyc_ref = (exists $ALLHIST->{$rg} && exists $ALLHIST->{$rg}->{$covariate}) ? $ALLHIST->{$rg}->{$covariate} : [];
+        $covariate_hist->{$rg}->{$covariate} = pdl(to_int(@{$cyc_ref}[$MINQUAL..$MAXQUAL]));
         ($covariate_recalibrated->{$rg}->{$covariate}, $pca1) = quality_svd($matrix, $covariate_hist->{$rg}->{$covariate}, $covariate_binsize, $last_count, $min_span);
         if ($verbose >= 2) {
           print STDOUT "# SVD fit (Position $covariate): $pca1\n";
