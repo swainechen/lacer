@@ -173,3 +173,8 @@
 **Vulnerability:** A Denial of Service (DoS) vulnerability (fatal crash) in `lacer.pl` during the recalibration phase. Attempting to dereference nested keys in the shared `$ALLHIST` hash (e.g., `@{$ALLHIST->{$rg}->{0}}`) triggered autovivification, which is fatal for shared scalars in Perl when the parent keys are missing.
 **Learning:** Even in the main thread, dereferencing nested keys of a shared hash can trigger fatal autovivification errors if the structure hasn't been explicitly initialized. This is a recurring vulnerability pattern in this codebase's use of `threads::shared`.
 **Prevention:** Always use multi-stage `exists` checks or the safe navigation pattern to access nested keys in shared hashes. Use a fallback empty reference (e.g., `my $ref = (exists $h->{k1} && exists $h->{k1}->{k2}) ? $h->{k1}->{k2} : []`) before dereferencing.
+
+## 2026-06-16 - DoS via Floating-Point Underflow to log(0) in Perl
+**Vulnerability:** A Denial of Service (DoS) vulnerability in `lacer.pl`'s `gatk_table0` subroutine where taking the logarithm of an error ratio (e.g., `log($sum_error/$sum_hist)`) could trigger a fatal "Can't take log of 0" error.
+**Learning:** Even if individual variables are strictly positive, their quotient can underflow to zero in Perl's floating-point representation. This is a recurring vulnerability pattern in this codebase's mathematical processing.
+**Prevention:** Always capture the result of a division in a temporary variable and explicitly verify it is strictly positive before passing it to the `log()` function, especially when dealing with potentially very small values.
