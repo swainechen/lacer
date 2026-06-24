@@ -1561,15 +1561,22 @@ sub gatk_table0 {
   my $sum_error = sum($error)->at(0);
   my $sum_reported = sum($reportederror)->at(0);
 
-  # Validate sums to prevent division by zero or log of zero in GATK table output
+  # Validate sums to prevent division by zero or log of zero in GATK table output.
+  # SECURITY: Guard against floating-point underflow that could lead to log(0).
   my $emp_q = 40.0;
   if ($sum_hist > 0 && $sum_error > 0) {
-    $emp_q = -10*log($sum_error/$sum_hist) / log(10);
+    my $emp_ratio = $sum_error / $sum_hist;
+    if ($emp_ratio > 0) {
+      $emp_q = -10 * log($emp_ratio) / log(10);
+    }
   }
 
   my $rep_q = 40.0;
   if ($sum_hist > 0 && $sum_reported > 0) {
-    $rep_q = -10*log($sum_reported/$sum_hist) / log(10);
+    my $rep_ratio = $sum_reported / $sum_hist;
+    if ($rep_ratio > 0) {
+      $rep_q = -10 * log($rep_ratio) / log(10);
+    }
   }
 
   push @return, sprintf("%-12s M% 21.0f.0000% 20.4f% 14d% *.2f\n", $rg, $emp_q, $rep_q, $sum_hist, $width, $sum_error);
