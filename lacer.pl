@@ -382,6 +382,8 @@ if (length $region && -f $region) {
   }
 } elsif (length $region) {
   ($chrom, $range) = split /:/, $region;
+  # SECURITY: Truncate chromosome name to prevent excessive memory allocation in @regions (DoS)
+  $chrom = substr($chrom, 0, 255) if defined $chrom;
   if (defined $range) {
     ($start, $end) = split /-/, $range;
   }
