@@ -178,3 +178,8 @@
 **Vulnerability:** A Denial of Service (DoS) vulnerability in `lacer.pl`'s `gatk_table0` subroutine where taking the logarithm of an error ratio (e.g., `log($sum_error/$sum_hist)`) could trigger a fatal "Can't take log of 0" error.
 **Learning:** Even if individual variables are strictly positive, their quotient can underflow to zero in Perl's floating-point representation. This is a recurring vulnerability pattern in this codebase's mathematical processing.
 **Prevention:** Always capture the result of a division in a temporary variable and explicitly verify it is strictly positive before passing it to the `log()` function, especially when dealing with potentially very small values.
+
+## 2026-06-27 - Tag Spoofing in Read Group Parsing
+**Vulnerability:** Read Group (RG) tags in BAM headers and alignment records were parsed using unanchored regular expressions, allowing malicious data in user-controllable fields (like Description or other auxiliary tags) to be misidentified as valid Read Groups.
+**Learning:** General regex searches on full lines or concatenated auxiliary strings are inherently ambiguous in structured formats like SAM/BAM. A string like "RG:Z:real" can be spoofed by "DS:Z:RG:Z:fake".
+**Prevention:** Always use structured parsing by splitting on the format's defined delimiters (tabs for SAM) and prefer unambiguous library APIs (like `get_tag_values`) for extracting specific metadata.

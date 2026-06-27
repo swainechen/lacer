@@ -459,11 +459,14 @@ if ($USE_READGROUPS) {
   @f = split /\n/, $bam_comments;
   foreach $i (@f) {
     if ($i =~ /^\@RG/) {
-      if ($i =~ /ID:(\S+)/) {
-        $rg = substr($1, 0, 255);
-      } else {
-        $rg = "NULL";
+      my @fields = split /\t/, $i;
+      my %tags;
+      foreach my $field (@fields) {
+        if ($field =~ /^([^:]+):(.*)$/) {
+          $tags{$1} = $2;
+        }
       }
+      $rg = defined $tags{ID} ? substr($tags{ID}, 0, 255) : "NULL";
       next if $seen_rg{$rg}++;
       # SECURITY: Limit the number of read groups to prevent DoS via memory
       # exhaustion and ensure compatibility with lacepr's MAX_RG (256).
@@ -472,8 +475,8 @@ if ($USE_READGROUPS) {
       }
       push(@RG_LIST, $rg);
       foreach $j (qw(ID PL PU LB SM)) {
-        if ($i =~ /$j:(\S+)/) {
-          $rginfo->{$rg}->{$j} = substr($1, 0, 255);
+        if (defined $tags{$j}) {
+          $rginfo->{$rg}->{$j} = substr($tags{$j}, 0, 255);
         } else {
           $rginfo->{$rg}->{$j} = "NULL";
         }
@@ -614,9 +617,11 @@ sub worker {
 
       my $this_rg;
       if ($USE_READGROUPS) {
-        $this_rg = $this_aln->aux;
-        if ($this_rg =~ /RG:Z:(\S+)/) {
-          $this_rg = substr($1, 0, 255);
+        # SECURITY: Use get_tag_values for unambiguous tag retrieval to prevent spoofing
+        # from other auxiliary tags.
+        $this_rg = $this_aln->get_tag_values('RG');
+        if (defined $this_rg) {
+          $this_rg = substr($this_rg, 0, 255);
         } else {
           $this_rg = "NULL";
         }
