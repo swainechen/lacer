@@ -50,7 +50,7 @@ int init_cache (int n) {
 }
 
 double log10binomial (double kd, long long n, double p) {
-  if (isnan(kd) || kd < 0 || kd > (double)n) {
+  if (isnan(kd) || isnan(p) || kd < 0 || n < 0 || kd > (double)n || p < 0.0 || p > 1.0) {
     return -1e100;
   }
   long long k = llround(kd);
@@ -60,7 +60,9 @@ double log10binomial (double kd, long long n, double p) {
   // Log-binomial using lgamma for robustness and precision:
   // log10(n! / (k!(n-k)!) * p^k * (1-p)^(n-k))
   double log_binom = lgamma((double)n + 1.0) - lgamma((double)k + 1.0) - lgamma((double)n - (double)k + 1.0);
-  double log_prob = log_binom + (double)k * log(p) + ((double)n - (double)k) * log(1.0 - p);
+  double term_k = (k > 0) ? (double)k * log(p) : 0.0;
+  double term_nk = (n > k) ? (double)(n - k) * log(1.0 - p) : 0.0;
+  double log_prob = log_binom + term_k + term_nk;
   return log_prob / log(10.0);
 }
 

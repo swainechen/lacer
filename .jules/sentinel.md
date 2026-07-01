@@ -183,3 +183,8 @@
 **Vulnerability:** Read Group (RG) tags in BAM headers and alignment records were parsed using unanchored regular expressions, allowing malicious data in user-controllable fields (like Description or other auxiliary tags) to be misidentified as valid Read Groups.
 **Learning:** General regex searches on full lines or concatenated auxiliary strings are inherently ambiguous in structured formats like SAM/BAM. A string like "RG:Z:real" can be spoofed by "DS:Z:RG:Z:fake".
 **Prevention:** Always use structured parsing by splitting on the format's defined delimiters (tabs for SAM) and prefer unambiguous library APIs (like `get_tag_values`) for extracting specific metadata.
+
+## 2026-06-28 - Numerical Instability and Domain Errors in log10binomial
+**Vulnerability:** The `log10binomial` function in `lacepr.c` lacked validation for the probability parameter $p$ and trial count $n$. It was also susceptible to producing `NaN` values due to $0 \times -\infty$ operations when $k=0$ or $k=n$.
+**Learning:** Mathematical functions using logarithms must strictly validate their domain. Even if a limit exists (like $x \log x \to 0$ as $x \to 0$), standard library `log()` calls with zero arguments trigger domain errors that propagate as `NaN`, potentially causing undefined behavior when cast to integers.
+**Prevention:** Implement strict input validation for all mathematical parameters (e.g., $p \in [0, 1]$, $n \ge 0$, and non-`NaN`). Use conditional guards to skip logarithmic calculations for terms with zero multipliers to ensure numerical stability at boundary conditions.
