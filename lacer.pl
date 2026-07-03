@@ -1057,7 +1057,9 @@ foreach $rg (keys %$alldata) {
   if (defined $svd_hist->{$rg} &&
       defined $recalibrated->{$rg} &&
       ref($recalibrated->{$rg}) eq "PDL" && 
-      ref($svd_hist->{$rg}) eq "PDL") {
+      ref($svd_hist->{$rg}) eq "PDL" &&
+      !$recalibrated->{$rg}->isnull &&
+      !$svd_hist->{$rg}->isnull) {
     push @table, $rg;
     my $rg_sum = sum($svd_hist->{$rg})->at(0);
     $max_bases = $rg_sum if $rg_sum > $max_bases;
@@ -1090,8 +1092,8 @@ if ($gatk) {
   @table = ("ReadGroup    EventType  EmpiricalQuality  EstimatedQReported  Observations  Errors   \n");
   foreach $rg (keys %$recalibrated) {
     next if !defined $svd_hist->{$rg};
-    next if ref($recalibrated->{$rg}) ne "PDL";
-    next if ref($svd_hist->{$rg}) ne "PDL";
+    next if ref($recalibrated->{$rg}) ne "PDL" || $recalibrated->{$rg}->isnull;
+    next if ref($svd_hist->{$rg}) ne "PDL" || $svd_hist->{$rg}->isnull;
     push @table, gatk_table0($rginfo->{$rg}->{$rgfield}, pdl($MINQUAL..$MAXQUAL), $recalibrated->{$rg}, $svd_hist->{$rg}, $max_bases);
   }
   $left_fields = { 0 => 1,	# ReadGroup
@@ -1110,8 +1112,8 @@ if ($gatk) {
   @table = ("ReadGroup    QualityScore  EventType  EmpiricalQuality  Observations  Errors   \n");
   foreach $rg (keys %$recalibrated) {
     next if !defined $svd_hist->{$rg};
-    next if ref($recalibrated->{$rg}) ne "PDL";
-    next if ref($svd_hist->{$rg}) ne "PDL";
+    next if ref($recalibrated->{$rg}) ne "PDL" || $recalibrated->{$rg}->isnull;
+    next if ref($svd_hist->{$rg}) ne "PDL" || $svd_hist->{$rg}->isnull;
     push @table, gatk_table1($rginfo->{$rg}->{$rgfield}, pdl($MINQUAL..$MAXQUAL), $recalibrated->{$rg}, $svd_hist->{$rg}, $max_bases);
   }
   $left_fields = { 0 => 1,	# ReadGroup
@@ -1131,9 +1133,9 @@ if ($gatk) {
   foreach $rg (keys %$covariate_recalibrated) {
     if ($do_covariates) {
       foreach $covariate (sort keys %{$covariate_recalibrated->{$rg}}) {
-        next if ref($covariate_recalibrated->{$rg}->{$covariate}) ne "PDL";
+        next if ref($covariate_recalibrated->{$rg}->{$covariate}) ne "PDL" || $covariate_recalibrated->{$rg}->{$covariate}->isnull;
         next if !defined $covariate_hist->{$rg}->{$covariate};
-        next if ref($covariate_hist->{$rg}->{$covariate}) ne "PDL";
+        next if ref($covariate_hist->{$rg}->{$covariate}) ne "PDL" || $covariate_hist->{$rg}->{$covariate}->isnull;
         next if $covariate =~ /\./;
         push @table, gatk_table2($rginfo->{$rg}->{$rgfield}, pdl($MINQUAL..$MAXQUAL), $covariate_recalibrated->{$rg}->{$covariate}, $covariate_hist->{$rg}->{$covariate}, $covariate, $max_bases);
       }
@@ -1335,6 +1337,7 @@ sub quality_svd {
   my ($matrix, $hist, $bin_size, $last_count, $min_span) = @_;
 
   # Initialize variables and validate data
+  if (!defined $hist || ref($hist) ne "PDL" || $hist->isnull) { return (null, 0); }
   my $total_bases = sum($hist)->at(0);
   if ($total_bases <= 0) { return (null, 0); }
   my $overall_q = $hist / $total_bases;
@@ -1538,7 +1541,9 @@ solid_recal_mode            SET_Q_ZERO
   my $sum = 0;
   my $rg;
   foreach $rg (keys %$hist) {
-    $sum += sum($hist->{$rg})->at(0);
+    if (defined $hist->{$rg} && ref($hist->{$rg}) eq "PDL" && !$hist->{$rg}->isnull) {
+      $sum += sum($hist->{$rg})->at(0);
+    }
   }
   my $width = 11;
   $width = $max_bases + 2 if $max_bases + 2 > $width;
@@ -1558,6 +1563,7 @@ solid_recal_mode            SET_Q_ZERO
 sub gatk_table0 {
   # overall quality
   my ($rg, $qbasis, $empirical, $hist, $max_length) = @_;
+  return () if $hist->isnull || $empirical->isnull || $qbasis->isnull;
   my $error = $hist * (10 ** (-$empirical/10));
   my $reportederror = $hist * (10 ** (-$qbasis/10));
   my @return = ();
@@ -1594,6 +1600,7 @@ sub gatk_table0 {
 sub gatk_table1 {
   # break out by quality scores
   my ($rg, $qbasis, $empirical, $hist, $max_length) = @_;
+  return () if $hist->isnull || $empirical->isnull || $qbasis->isnull;
   my $error = $hist * (10 ** (-$empirical/10));
   my @error = list($error);
   my @qbasis = list($qbasis);
@@ -1614,6 +1621,7 @@ sub gatk_table1 {
 sub gatk_table2 {
   # break out by covariates
   my ($rg, $qbasis, $empirical, $hist, $covariate, $max_length) = @_;
+  return () if $hist->isnull || $empirical->isnull || $qbasis->isnull;
   my $error = $hist * (10 ** (-$empirical/10));
   my @error = list($error);
   my @qbasis = list($qbasis);
