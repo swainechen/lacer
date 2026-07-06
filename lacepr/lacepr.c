@@ -557,6 +557,7 @@ int main (int argc, char *argv[])
   char *use_rg = NULL;
   char rg_field[3] = "PU";
   int read_pairnum = 1;
+  int field_i;
   while (1) {
     int option_index = 0;
     static struct option long_options[] = {
@@ -573,7 +574,22 @@ int main (int argc, char *argv[])
     if (getopt_c == -1)
       break;
     switch (getopt_c) {
-      case 'f': strncpy(rg_field, optarg, 2); rg_field[2] = '\0'; break;
+      case 'f': {
+        int valid = 0;
+        for (field_i = 0; field_i < NUM_KNOWN_RGFIELDS; field_i++) {
+          if (strcmp(optarg, KNOWN_RGFIELD[field_i]) == 0) {
+            valid = 1;
+            break;
+          }
+        }
+        if (!valid) {
+          fprintf(stderr, "Error: Invalid --field '%s'. Must be one of ID, PL, PU, LB, SM.\n", optarg);
+          return 1;
+        }
+        strncpy(rg_field, optarg, 2);
+        rg_field[2] = '\0';
+        break;
+      }
       case 'b': inbam = optarg; break;
       case 'q': infastq = optarg; break;
       case 'p': read_pairnum = atoi(optarg); break;
